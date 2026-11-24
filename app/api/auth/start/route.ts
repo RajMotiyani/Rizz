@@ -17,15 +17,15 @@ export async function POST(req: Request) {
   const phone = normalizePhone(parsed.data.phone);
   if (!phone) return NextResponse.json({ error: "Enter a valid 10-digit mobile number." }, { status: 400 });
 
-  // Rate limits: 5 codes per email per hour, 20 per network per hour.
-  const s = store();
-  const perEmail = await s.incr(`rl:code:${email}`, 3600);
-  const perIp = await s.incr(`rl:codeip:${await clientIp()}`, 3600);
-  if (perEmail > 5 || perIp > 20) {
-    return NextResponse.json({ error: "Too many codes requested. Try again in an hour." }, { status: 429 });
-  }
-
   try {
+    // Rate limits: 5 codes per email per hour, 20 per network per hour.
+    const s = store();
+    const perEmail = await s.incr(`rl:code:${email}`, 3600);
+    const perIp = await s.incr(`rl:codeip:${await clientIp()}`, 3600);
+    if (perEmail > 5 || perIp > 20) {
+      return NextResponse.json({ error: "Too many codes requested. Try again in an hour." }, { status: 429 });
+    }
+
     const code = await createCode(email, phone);
     await sendLoginCode(email, code);
   } catch (err) {

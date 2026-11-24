@@ -668,7 +668,7 @@ function Login({ onDone }: { onDone: () => void }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, phone }),
       });
-      const d = await r.json();
+      const d = await r.json().catch(() => ({ error: "Server error. Please try again." }));
       if (!r.ok) throw new Error(d.error);
       setStep("code");
       setCode("");
@@ -690,7 +690,7 @@ function Login({ onDone }: { onDone: () => void }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, code: value }),
       });
-      const d = await r.json();
+      const d = await r.json().catch(() => ({ error: "Server error. Please try again." }));
       if (!r.ok) throw new Error(d.error);
       onDone();
     } catch (e) {
