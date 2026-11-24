@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { authEnabled } from "@/lib/auth";
-import { db, dbConfigured } from "@/lib/db";
+import { db, dbConfigured, rpc } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +23,7 @@ export async function GET() {
   if (dbConfigured()) {
     try {
       await db("users?select=id&limit=1");
+      await rpc("kv_incr", { k: "health:ping", ttl_seconds: 60, delta: 1 }); // checks the functions exist too
       database = "working";
     } catch (e) {
       database = `error: ${(e as Error).message.slice(0, 120)}`;
