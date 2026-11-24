@@ -71,3 +71,11 @@ $$;
 revoke execute on function public.kv_incr(text, integer, integer) from public, anon, authenticated;
 revoke execute on function public.record_reply(uuid) from public, anon, authenticated;
 revoke execute on function public.record_login(text, text) from public, anon, authenticated;
+
+-- The server connects as service_role. Newer Supabase projects don't grant it access
+-- to tables created in SQL automatically, so grant it explicitly.
+grant usage on schema public to service_role;
+grant select, insert, update, delete on public.users, public.kv to service_role;
+grant execute on function public.kv_incr(text, integer, integer) to service_role;
+grant execute on function public.record_reply(uuid) to service_role;
+grant execute on function public.record_login(text, text) to service_role;
