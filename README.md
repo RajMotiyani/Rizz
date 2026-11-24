@@ -19,10 +19,11 @@ npm run dev                  # http://localhost:3000
 
 ## Deploy on Vercel (free, ~10 minutes)
 1. In Vercel, click Add New → Project and import this GitHub repo.
-2. Create a free Upstash Redis database (Vercel → Storage → Upstash, or upstash.com) and copy its REST URL and token.
-3. In the project's Settings → Environment Variables, add `GEMINI_API_KEY`, `SESSION_SECRET`,
-   `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`.
-4. Deploy. Share the link.
+2. Before clicking Deploy, open Environment Variables and add `GEMINI_API_KEY` and `SESSION_SECRET`.
+3. Deploy. Share the link.
+4. Recommended once you have users: add a free Upstash Redis database (Vercel → Storage → Upstash) and set
+   `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN`. Without it the app still works, but daily limits
+   are only approximate because Vercel doesn't keep files between requests.
 
 ## Limits
 - Each device gets 10 replies a day (resets at midnight IST), plus 30/day per IP so clearing cookies doesn't bypass it.

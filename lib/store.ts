@@ -50,7 +50,10 @@ class UpstashStore implements Store {
 type Entry = { v: string; exp?: number };
 
 class FileStore implements Store {
-  private file = path.join(process.cwd(), ".data", "store.json");
+  // On serverless hosts (Vercel) only /tmp is writable, and it's per-instance, so limits are approximate there.
+  private file = process.env.VERCEL
+    ? path.join("/tmp", "rizz-store.json")
+    : path.join(process.cwd(), ".data", "store.json");
   private data: Record<string, Entry> = {};
   constructor() {
     try {
@@ -60,8 +63,12 @@ class FileStore implements Store {
     }
   }
   private save() {
-    fs.mkdirSync(path.dirname(this.file), { recursive: true });
-    fs.writeFileSync(this.file, JSON.stringify(this.data));
+    try {
+      fs.mkdirSync(path.dirname(this.file), { recursive: true });
+      fs.writeFileSync(this.file, JSON.stringify(this.data));
+    } catch {
+      // Read-only filesystem: keep data in memory only.
+    }
   }
   private live(key: string): Entry | undefined {
     const e = this.data[key];
