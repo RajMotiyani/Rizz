@@ -39,6 +39,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Add a screenshot or paste the chat first." }, { status: 400 });
   }
 
+  if (!process.env.GEMINI_API_KEY && !process.env.ANTHROPIC_API_KEY) {
+    return NextResponse.json({ error: "Rizz isn't set up yet: the AI key is missing on the server." }, { status: 503 });
+  }
+
   const id = await deviceId();
   const c = await claim(id, await clientIp());
   if (!c.ok) {
