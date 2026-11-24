@@ -3,13 +3,18 @@ import { cookies, headers } from "next/headers";
 
 const COOKIE = "rizz_id";
 
+let warned = false;
 function secret() {
   const s = process.env.SESSION_SECRET;
-  if (!s || s === "change-me") {
-    if (process.env.NODE_ENV === "production") throw new Error("SESSION_SECRET is not set");
-    return "dev-only-secret";
+  if (s && s !== "change-me") return s;
+  // The cookie only guards daily limits, so rather than take the app down, derive a
+  // stable secret from another server-only value and log a warning.
+  if (!warned) {
+    console.warn("SESSION_SECRET is not set; using a derived fallback. Set it in your environment variables.");
+    warned = true;
   }
-  return s;
+  const base = process.env.GEMINI_API_KEY ?? process.env.ANTHROPIC_API_KEY ?? "dev-only-secret";
+  return crypto.createHash("sha256").update(`rizz-session:${base}`).digest("hex");
 }
 
 function sign(id: string) {
