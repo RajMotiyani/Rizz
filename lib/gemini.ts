@@ -1,4 +1,4 @@
-import { SCHEMA, SYSTEM, RefusedError, type ImageInput, type ReplyResult } from "./claude";
+import { SCHEMA, SYSTEM, RefusedError, normalize, userPrompt, type ImageInput, type MatchContext, type ReplyResult } from "./claude";
 
 const API = "https://generativelanguage.googleapis.com/v1beta/models";
 
@@ -23,6 +23,7 @@ export async function generateWithGemini(input: {
   tone: string;
   language: string;
   goal: string;
+  match?: MatchContext | null;
 }): Promise<ReplyResult> {
   const key = process.env.GEMINI_API_KEY;
   if (!key) throw new Error("GEMINI_API_KEY is not set");
@@ -30,13 +31,7 @@ export async function generateWithGemini(input: {
   const parts: Record<string, unknown>[] = input.images.map((img) => ({
     inline_data: { mime_type: img.mediaType, data: img.data },
   }));
-  const lines = [
-    input.chatText ? `Chat:\n"""\n${input.chatText}\n"""` : "The chat is in the screenshot(s) above.",
-    `Tone: ${input.tone}`,
-    `Language: ${input.language}. Write all 4 replies in ${input.language}${input.language === "Hinglish" ? " (Hindi + English mixed, Roman script, e.g. \"acha toh kab mil rahe ho?\")" : input.language === "Tanglish" ? " (Tamil + English mixed, Roman script)" : ""}, even if the chat is in another language.`,
-  ];
-  if (input.goal) lines.push(`What I want from this reply: ${input.goal}`);
-  parts.push({ text: lines.join("\n\n") });
+  parts.push({ text: userPrompt(input) });
 
   const body = JSON.stringify({
     system_instruction: { parts: [{ text: SYSTEM }] },
@@ -45,7 +40,7 @@ export async function generateWithGemini(input: {
       responseMimeType: "application/json",
       responseJsonSchema: SCHEMA,
       temperature: 1,
-      maxOutputTokens: 2048,
+      maxOutputTokens: 4096,
     },
   });
 
@@ -71,7 +66,7 @@ export async function generateWithGemini(input: {
     const parsed = JSON.parse(text) as ReplyResult;
     parsed.replies = (parsed.replies ?? []).filter((r) => r.text?.trim()).slice(0, 4);
     if (!parsed.replies.length) throw new Error("No replies returned");
-    return parsed;
+    return normalize(parsed);
   }
   throw lastErr;
 }

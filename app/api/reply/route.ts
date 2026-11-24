@@ -26,6 +26,14 @@ const Body = z.object({
   tone: z.enum(TONES),
   language: z.enum(LANGUAGES),
   goal: z.string().max(200).default(""),
+  match: z
+    .object({
+      name: z.string().trim().min(1).max(40),
+      memory: z.string().max(1200).default(""),
+      scores: z.array(z.number().min(0).max(100)).max(10).default([]),
+    })
+    .nullable()
+    .default(null),
 });
 
 export async function POST(req: Request) {

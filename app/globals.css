@@ -72,3 +72,23 @@ textarea { min-height: 130px; }
 .steps { padding-left: 20px; color: var(--text); line-height: 1.6; margin: 12px 0 6px; }
 .steps li { margin-bottom: 8px; }
 .steps b { color: var(--accent2); }
+.hint { font-size: 13px; color: var(--muted); margin: 10px 0 0; line-height: 1.45; }
+.link.inline { margin: 0; font-size: 13px; }
+.chip.add { border-style: dashed; color: var(--muted); }
+.chip-score { opacity: .8; font-size: 12px; margin-left: 2px; }
+.meter { background: var(--bg); border-radius: 14px; padding: 14px; margin-bottom: 14px; border: 1px solid #3a3056; }
+.meter-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.meter-label { font-size: 13px; color: var(--muted); font-weight: 600; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.tag { font-size: 11px; background: var(--card2); padding: 2px 8px; border-radius: 999px; font-weight: 600; }
+.tag.solid { color: var(--ok); }
+.meter-score { font-size: 40px; font-weight: 800; line-height: 1.1; margin-top: 4px; }
+.meter-score small { font-size: 15px; color: var(--muted); font-weight: 600; margin-left: 2px; }
+.trend { font-size: 12px; color: var(--muted); font-weight: 600; margin-left: 10px; }
+.verdict { border: 1.5px solid; border-radius: 12px; padding: 7px 10px; font-weight: 700; font-size: 14px; white-space: nowrap; }
+.bar { height: 8px; background: var(--card2); border-radius: 999px; overflow: hidden; margin: 10px 0 4px; }
+.bar div { height: 100%; border-radius: 999px; transition: width .6s ease; }
+.next { margin: 10px 0 0; font-size: 15px; line-height: 1.45; }
+.signals { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.sig { font-size: 12.5px; padding: 4px 9px; border-radius: 999px; background: var(--card2); }
+.sig.good { color: var(--ok); }
+.sig.bad { color: #ff8a8a; }

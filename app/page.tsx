@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { VibeMusic } from "@/lib/music";
+import { loadMatches, overallScore, saveMatches, SOLID_AFTER, trend, VERDICTS, type Match, type Verdict } from "@/lib/matches";
 
 const TONES = [
   { id: "flirty", label: "😏 Flirty" },
@@ -19,7 +20,8 @@ const LANGS = [
 
 type Img = { mediaType: string; data: string; preview: string };
 type Reply = { text: string; vibe: string };
-type Result = { read: string; replies: Reply[]; tip: string };
+type Analysis = { interest: number; green: string[]; red: string[]; verdict: Verdict; nextMove: string; memory: string };
+type Result = { read: string; replies: Reply[]; tip: string; analysis: Analysis };
 type Status = { used: number; left: number; limit: number };
 
 /** Shrink screenshots in the browser so uploads are fast on mobile data. */
@@ -52,6 +54,42 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState<Result | null>(null);
+  // Matches (people the user is chatting with), saved on this phone only.
+  const [matches, setMatches] = useState<Match[]>([]);
+  const [matchId, setMatchId] = useState<string | null>(null);
+  const [resultMatchId, setResultMatchId] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [newName, setNewName] = useState("");
+  useEffect(() => {
+    const list = loadMatches();
+    setMatches(list);
+    const lastId = localStorage.getItem("rizz_last_match");
+    if (lastId && list.some((m) => m.id === lastId)) setMatchId(lastId);
+  }, []);
+  function updateMatches(list: Match[]) {
+    setMatches(list);
+    saveMatches(list);
+  }
+  function selectMatch(id: string | null) {
+    setMatchId(id);
+    if (id) localStorage.setItem("rizz_last_match", id);
+    else localStorage.removeItem("rizz_last_match");
+  }
+  function addMatch() {
+    const name = newName.trim().slice(0, 40);
+    if (!name) return;
+    const m: Match = { id: crypto.randomUUID(), name, memory: "", checkins: [] };
+    updateMatches([...matches, m]);
+    selectMatch(m.id);
+    setNewName("");
+    setAdding(false);
+  }
+  function forgetMatch(id: string) {
+    updateMatches(matches.filter((m) => m.id !== id));
+    if (matchId === id) selectMatch(null);
+    if (resultMatchId === id) setResultMatchId(null);
+  }
+  const selected = matches.find((m) => m.id === matchId) ?? null;
   const [copied, setCopied] = useState<number | null>(null);
   const [status, setStatus] = useState<Status | null>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
@@ -221,12 +259,31 @@ export default function Home() {
           tone,
           language,
           goal,
+          match: selected
+            ? { name: selected.name, memory: selected.memory, scores: selected.checkins.slice(-10).map((c) => c.interest) }
+            : null,
         }),
       });
       const data = await r.json();
       if (data.status) setStatus(data.status);
       if (!r.ok) throw new Error(data.error || "Something went wrong.");
       setResult(data.result);
+      setResultMatchId(selected?.id ?? null);
+      if (selected) {
+        const a: Analysis = data.result.analysis;
+        updateMatches(
+          matches.map((m) =>
+            m.id === selected.id
+              ? {
+                  ...m,
+                  memory: a.memory || m.memory,
+                  checkins: [...m.checkins, { at: Date.now(), interest: a.interest, verdict: a.verdict }].slice(-20),
+                  last: { verdict: a.verdict, nextMove: a.nextMove, green: a.green, red: a.red },
+                }
+              : m,
+          ),
+        );
+      }
       setCopied(null);
       setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
     } catch (e) {
@@ -322,6 +379,47 @@ export default function Home() {
       </section>
 
       <section className="card">
+        <p className="label">Who&apos;s this chat with?</p>
+        <div className="chips">
+          <button className={`chip ${!matchId ? "on" : ""}`} onClick={() => selectMatch(null)}>Just this once</button>
+          {matches.map((m) => (
+            <button key={m.id} className={`chip ${matchId === m.id ? "on" : ""}`} onClick={() => selectMatch(m.id)}>
+              {m.name}
+              {m.checkins.length > 0 && <span className="chip-score"> {overallScore(m)}</span>}
+            </button>
+          ))}
+          {!adding && (
+            <button className="chip add" onClick={() => setAdding(true)}>＋ Add person</button>
+          )}
+        </div>
+        {adding && (
+          <div className="row">
+            <input
+              type="text"
+              autoFocus
+              placeholder="Their name or nickname"
+              value={newName}
+              maxLength={40}
+              onChange={(e) => setNewName(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && addMatch()}
+            />
+            <button onClick={addMatch}>Save</button>
+          </div>
+        )}
+        <p className="hint">
+          {selected
+            ? `Rizz remembers your chats with ${selected.name} and scores their interest over time. ${selected.checkins.length < SOLID_AFTER ? `${SOLID_AFTER - selected.checkins.length} more chat${SOLID_AFTER - selected.checkins.length === 1 ? "" : "s"} for a solid score.` : ""}`
+            : "Add the person to track how interested they are across chats. Saved only on this phone."}
+          {selected && (
+            <>
+              {" "}
+              <button className="link inline" onClick={() => forgetMatch(selected.id)}>Forget {selected.name}</button>
+            </>
+          )}
+        </p>
+      </section>
+
+      <section className="card">
         <p className="label">Vibe</p>
         <div className="chips">
           {TONES.map((t) => (
@@ -355,6 +453,7 @@ export default function Home() {
 
       {result && (
         <section className="card" ref={resultsRef} style={{ marginTop: 16 }}>
+          <InterestMeter result={result} match={matches.find((m) => m.id === resultMatchId) ?? null} />
           <p className="read">👀 {result.read}</p>
           {result.replies.map((r, i) => (
             <div className="reply" key={i}>
@@ -418,5 +517,44 @@ export default function Home() {
         </div>
       )}
     </main>
+  );
+}
+
+function InterestMeter({ result, match }: { result: Result; match: Match | null }) {
+  const a = result.analysis;
+  if (!a) return null;
+  const n = match?.checkins.length ?? 0;
+  const score = match && n ? overallScore(match)! : a.interest;
+  const solid = !!match && n >= SOLID_AFTER;
+  const t = match ? trend(match) : null;
+  const v = VERDICTS[a.verdict] ?? VERDICTS.keep_going;
+  const color = score >= 70 ? "#3ddc97" : score >= 45 ? "#ffd166" : "#ff6b6b";
+  return (
+    <div className="meter">
+      <div className="meter-top">
+        <div>
+          <div className="meter-label">
+            {match ? `${match.name}'s interest` : "Interest in this chat"}
+            {match && !solid && <span className="tag">Early read · {n}/{SOLID_AFTER} chats</span>}
+            {solid && <span className="tag solid">Based on {n} chats</span>}
+          </div>
+          <div className="meter-score" style={{ color }}>
+            {score}
+            <small>/100</small>
+            {t && <span className="trend">{t === "up" ? "▲ rising" : t === "down" ? "▼ dropping" : "● steady"}</span>}
+          </div>
+        </div>
+        <div className="verdict" style={{ borderColor: v.color, color: v.color }}>{v.label}</div>
+      </div>
+      <div className="bar"><div style={{ width: `${score}%`, background: color }} /></div>
+      {a.nextMove && <p className="next">➡️ {a.nextMove}</p>}
+      {(a.green.length > 0 || a.red.length > 0) && (
+        <div className="signals">
+          {a.green.map((g, i) => <span key={`g${i}`} className="sig good">✓ {g}</span>)}
+          {a.red.map((r, i) => <span key={`r${i}`} className="sig bad">✗ {r}</span>)}
+        </div>
+      )}
+      {!match && <p className="hint">Tip: add this person above to track their interest over 3+ chats.</p>}
+    </div>
   );
 }

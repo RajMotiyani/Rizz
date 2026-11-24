@@ -1,4 +1,4 @@
-import { generateWithClaude, type ImageInput, type Language, type ReplyResult, type Tone } from "./claude";
+import { generateWithClaude, type ImageInput, type Language, type MatchContext, type ReplyResult, type Tone } from "./claude";
 import { generateWithGemini } from "./gemini";
 
 /**
@@ -11,6 +11,7 @@ export async function generateReplies(input: {
   tone: Tone;
   language: Language;
   goal: string;
+  match?: MatchContext | null;
 }): Promise<ReplyResult> {
   if (!process.env.GEMINI_API_KEY && !process.env.ANTHROPIC_API_KEY) {
     console.error("No AI key set: add GEMINI_API_KEY in your environment variables.");
