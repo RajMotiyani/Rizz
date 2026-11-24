@@ -26,7 +26,7 @@ npm run dev                  # http://localhost:3000
    are only approximate because Vercel doesn't keep files between requests.
 
 ## Limits
-- Each device gets 10 replies a day (resets at midnight IST), plus 30/day per IP so clearing cookies doesn't bypass it.
+- Each device gets 50 replies a day (resets at midnight IST), plus 150/day per IP so clearing cookies doesn't bypass it.
   Failed generations don't count. Change with `REPLIES_PER_DAY`.
 - Gemini's free tier allows roughly 500 requests a day per model, so ~1,000 a day across both models.
   If you outgrow it, enable billing on the Gemini key; Flash-Lite costs a fraction of a rupee per reply.

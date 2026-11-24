@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { VibeMusic } from "@/lib/music";
 
 const TONES = [
   { id: "flirty", label: "😏 Flirty" },
@@ -59,6 +60,60 @@ export default function Home() {
     const r = await fetch("/api/me");
     if (r.ok) setStatus(await r.json());
   }, []);
+
+  // Background music that follows the selected vibe. On by default; browsers only allow
+  // sound after the first tap, so it starts on the first interaction.
+  const musicRef = useRef<VibeMusic | null>(null);
+  const [musicOn, setMusicOn] = useState(true);
+  const toneRef = useRef(tone);
+  toneRef.current = tone;
+  useEffect(() => {
+    if (localStorage.getItem("rizz_music") === "off") setMusicOn(false);
+  }, []);
+  useEffect(() => {
+    if (!musicOn) {
+      musicRef.current?.stop();
+      return;
+    }
+    const begin = () => {
+      musicRef.current ??= new VibeMusic();
+      musicRef.current.start(toneRef.current).catch(() => {});
+    };
+    if (musicRef.current?.playing) return;
+    if (musicRef.current) {
+      begin();
+      return;
+    }
+    window.addEventListener("pointerdown", begin, { once: true });
+    window.addEventListener("keydown", begin, { once: true });
+    return () => {
+      window.removeEventListener("pointerdown", begin);
+      window.removeEventListener("keydown", begin);
+    };
+  }, [musicOn]);
+  useEffect(() => {
+    musicRef.current?.setVibe(tone);
+  }, [tone]);
+  useEffect(() => {
+    // Pause when the app is in the background.
+    const onVis = () => {
+      if (!musicOn || !musicRef.current) return;
+      if (document.hidden) musicRef.current.stop();
+      else musicRef.current.start(toneRef.current).catch(() => {});
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, [musicOn]);
+  function toggleMusic() {
+    const next = !musicOn;
+    setMusicOn(next);
+    localStorage.setItem("rizz_music", next ? "on" : "off");
+    if (next) {
+      // Start right away, inside this tap, so the browser allows sound.
+      musicRef.current ??= new VibeMusic();
+      musicRef.current.start(toneRef.current).catch(() => {});
+    }
+  }
 
   // Install-to-home-screen support.
   const [installEvt, setInstallEvt] = useState<(Event & { prompt: () => Promise<void> }) | null>(null);
@@ -174,7 +229,17 @@ export default function Home() {
         <div className="logo">
           <span>Rizz</span> ✨
         </div>
-        {status && <span className="badge">{status.left}/{status.limit} left today</span>}
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <button
+            className="badge"
+            onClick={toggleMusic}
+            aria-label={musicOn ? "Turn music off" : "Turn music on"}
+            title={musicOn ? "Music on" : "Music off"}
+          >
+            {musicOn ? "🔊 Music" : "🔇 Music"}
+          </button>
+          {status && <span className="badge">{status.left}/{status.limit} left</span>}
+        </div>
       </div>
       {(installEvt || iosHint) && (
         <div className="install">
