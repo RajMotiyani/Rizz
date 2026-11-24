@@ -3,7 +3,7 @@
  * Without BREVO_API_KEY (local dev), the code is printed to the server log instead.
  */
 export async function sendLoginCode(to: string, code: string): Promise<void> {
-  const key = (process.env.BREVO_API_KEY ?? process.env.BREVO_KEY_1 ?? process.env.BREVO_KEY);
+  const key = brevoKey();
   const from = process.env.EMAIL_FROM;
   if (!key || !from) {
     if (process.env.NODE_ENV === "production" && process.env.AUTH_DEV_LOG !== "1") {
@@ -31,4 +31,10 @@ export async function sendLoginCode(to: string, code: string): Promise<void> {
     }),
   });
   if (!res.ok) throw new Error(`Brevo ${res.status}: ${(await res.text()).slice(0, 300)}`);
+}
+
+/** The Brevo key to use: prefers whichever env var holds an API key (xkeysib-). */
+export function brevoKey(): string | undefined {
+  const all = [process.env.BREVO_API_KEY, process.env.BREVO_KEY_1, process.env.BREVO_KEY].map((v) => v?.trim()).filter(Boolean) as string[];
+  return all.find((k) => k.startsWith("xkeysib-")) ?? all[0];
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { authEnabled } from "@/lib/auth";
 import { db, dbConfigured, rpc } from "@/lib/db";
+import { brevoKey } from "@/lib/email";
 
 export const dynamic = "force-dynamic";
 
@@ -31,7 +32,7 @@ export async function GET() {
   }
   // Email (Brevo): checks the key and that EMAIL_FROM is a verified sender. Never returns the key.
   let email = "not set";
-  const bkey = process.env.BREVO_API_KEY ?? process.env.BREVO_KEY;
+  const bkey = brevoKey();
   if (bkey) {
     const kind = bkey.startsWith("xkeysib-") ? "api key" : bkey.startsWith("xsmtpsib-") ? "SMTP key (wrong type: need an API key starting xkeysib-)" : "unknown key format";
     try {
@@ -50,7 +51,7 @@ export async function GET() {
   }
   return NextResponse.json({
     email,
-    login: authEnabled() ? "on" : `off (missing: ${[["BREVO_API_KEY", (process.env.BREVO_API_KEY ?? process.env.BREVO_KEY_1 ?? process.env.BREVO_KEY)], ["EMAIL_FROM", process.env.EMAIL_FROM], ["SUPABASE_URL", process.env.SUPABASE_URL], ["SUPABASE_SERVICE_ROLE_KEY", process.env.SUPABASE_SERVICE_ROLE_KEY]].filter(([, v]) => !v).map(([k]) => k).join(", ")})`,
+    login: authEnabled() ? "on" : `off (missing: ${[["BREVO_API_KEY", brevoKey()], ["EMAIL_FROM", process.env.EMAIL_FROM], ["SUPABASE_URL", process.env.SUPABASE_URL], ["SUPABASE_SERVICE_ROLE_KEY", process.env.SUPABASE_SERVICE_ROLE_KEY]].filter(([, v]) => !v).map(([k]) => k).join(", ")})`,
     database,
     gemini,
     provider: process.env.AI_PROVIDER ?? (key ? "gemini" : "claude"),

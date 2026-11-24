@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { db, dbConfigured, rpc, type UserRow } from "./db";
 import { store } from "./store";
 import { deviceId, secret } from "./session";
+import { brevoKey } from "./email";
 
 const COOKIE = "rizz_session";
 const SESSION_DAYS = 30;
@@ -105,7 +106,7 @@ export async function endSession() {
  */
 export function authEnabled(): boolean {
   // Needs email sending AND the user database, so accounts are never kept in temporary storage.
-  return (!!((process.env.BREVO_API_KEY ?? process.env.BREVO_KEY_1 ?? process.env.BREVO_KEY) && process.env.EMAIL_FROM) && dbConfigured()) || process.env.AUTH_DEV_LOG === "1";
+  return (!!(brevoKey() && process.env.EMAIL_FROM) && dbConfigured()) || process.env.AUTH_DEV_LOG === "1";
 }
 
 /** The logged-in user, or null. When login is off, an anonymous per-device user. */
