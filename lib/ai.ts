@@ -1,5 +1,5 @@
-import { generateWithClaude, type ImageInput, type Language, type MatchContext, type ReplyResult, type Tone } from "./claude";
-import { generateWithGemini } from "./gemini";
+import { generateWithClaude, translateWithClaude, type ImageInput, type Language, type MatchContext, type ReplyResult, type Tone } from "./claude";
+import { generateWithGemini, translateWithGemini } from "./gemini";
 
 /**
  * Picks the AI provider. Gemini's free tier is used when GEMINI_API_KEY is set (no cost),
@@ -20,4 +20,11 @@ export async function generateReplies(input: {
   const provider =
     process.env.AI_PROVIDER ?? (process.env.GEMINI_API_KEY ? "gemini" : "claude");
   return provider === "gemini" ? generateWithGemini(input) : generateWithClaude(input);
+}
+
+/** Translates finished replies into another language, keeping them casual and human. */
+export async function translateReplies(texts: string[], language: Language): Promise<string[]> {
+  const provider =
+    process.env.AI_PROVIDER ?? (process.env.GEMINI_API_KEY ? "gemini" : "claude");
+  return provider === "gemini" ? translateWithGemini(texts, language) : translateWithClaude(texts, language);
 }

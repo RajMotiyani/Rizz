@@ -22,10 +22,15 @@ const THEMES = [
   { id: "night", name: "🌙 Night Owl", desc: "Late-night neon", sw: ["#070b1a", "#7c5cff", "#22d3ee"] },
 ] as const;
 
-const LANGS = [
+const INDIA_LANGS = [
   "English", "Hinglish", "Hindi", "Tanglish", "Tamil", "Telugu",
   "Kannada", "Malayalam", "Marathi", "Bengali", "Gujarati", "Punjabi",
 ] as const;
+const WORLD_LANGS = [
+  "Spanish", "French", "Italian", "German", "Portuguese", "Dutch", "Russian",
+  "Arabic", "Turkish", "Japanese", "Korean", "Chinese", "Indonesian", "Urdu",
+] as const;
+const ALL_LANGS = [...INDIA_LANGS, ...WORLD_LANGS];
 
 type Img = { mediaType: string; data: string; preview: string };
 type Reply = { text: string; vibe: string };
@@ -101,6 +106,40 @@ export default function Home() {
   }
   const selected = matches.find((m) => m.id === matchId) ?? null;
   const [copied, setCopied] = useState<number | null>(null);
+  const [moreLangs, setMoreLangs] = useState(false);
+  const [trLang, setTrLang] = useState("French");
+  const [translations, setTranslations] = useState<{ lang: string; texts: string[] } | null>(null);
+  const [trBusy, setTrBusy] = useState(false);
+  const [trErr, setTrErr] = useState("");
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("rizz_tr_lang");
+      if (saved && (ALL_LANGS as readonly string[]).includes(saved)) setTrLang(saved);
+    } catch {}
+  }, []);
+  async function translate() {
+    if (!result) return;
+    setTrBusy(true);
+    setTrErr("");
+    try {
+      localStorage.setItem("rizz_tr_lang", trLang);
+    } catch {}
+    try {
+      const r = await fetch("/api/translate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ texts: result.replies.map((x) => x.text), language: trLang }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (r.status === 401) return setAuthed(false);
+      if (!r.ok) throw new Error(data.error || "Couldn't translate right now. Try again.");
+      setTranslations({ lang: trLang, texts: data.translations });
+    } catch (e) {
+      setTrErr((e as Error).message);
+    } finally {
+      setTrBusy(false);
+    }
+  }
   const [status, setStatus] = useState<Status | null>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
 
@@ -323,6 +362,8 @@ export default function Home() {
       if (data.status) setStatus((s) => ({ ...s, ...data.status }));
       if (!r.ok) throw new Error(data.error || "Something went wrong.");
       setResult(data.result);
+      setTranslations(null);
+      setTrErr("");
       try {
         if (data.result.style) localStorage.setItem("rizz_style", data.result.style);
       } catch {}
@@ -504,11 +545,20 @@ export default function Home() {
         <div data-tour="language" style={{ marginTop: 14 }}>
           <p className="label">Language</p>
           <div className="chips">
-            {LANGS.map((l) => (
+            {INDIA_LANGS.map((l) => (
               <button key={l} className={`chip ${language === l ? "on" : ""}`} onClick={() => setLanguage(l)}>
                 {l}
               </button>
             ))}
+            {(moreLangs || (WORLD_LANGS as readonly string[]).includes(language)) &&
+              WORLD_LANGS.map((l) => (
+                <button key={l} className={`chip ${language === l ? "on" : ""}`} onClick={() => setLanguage(l)}>
+                  {l}
+                </button>
+              ))}
+            {!moreLangs && !(WORLD_LANGS as readonly string[]).includes(language) && (
+              <button className="chip add" onClick={() => setMoreLangs(true)}>🌍 More languages</button>
+            )}
           </div>
         </div>
         <div data-tour="goal" style={{ marginTop: 14 }}>
@@ -532,6 +582,21 @@ export default function Home() {
         <section className="card" ref={resultsRef} style={{ marginTop: 16 }}>
           <InterestMeter result={result} match={matches.find((m) => m.id === resultMatchId) ?? null} />
           <p className="read">👀 {result.read}</p>
+          <div className="translate" data-tour="translate">
+            <span>🌐 Translate to</span>
+            <select value={trLang} onChange={(e) => setTrLang(e.target.value)} aria-label="Translate replies to">
+              <optgroup label="India">
+                {INDIA_LANGS.map((l) => <option key={l} value={l}>{l}</option>)}
+              </optgroup>
+              <optgroup label="World">
+                {WORLD_LANGS.map((l) => <option key={l} value={l}>{l}</option>)}
+              </optgroup>
+            </select>
+            <button onClick={translate} disabled={trBusy}>
+              {trBusy ? <span className="spinner" /> : translations?.lang === trLang ? "Redo" : "Go"}
+            </button>
+          </div>
+          {trErr && <p className="err" style={{ marginTop: 0 }}>{trErr}</p>}
           {result.replies.map((r, i) => (
             <div className="reply" key={i}>
               <div className="vibe">{r.vibe}</div>
@@ -541,6 +606,17 @@ export default function Home() {
                   {copied === i ? "✓ Copied" : "Copy"}
                 </button>
               </div>
+              {translations?.texts[i] && (
+                <div className="tr">
+                  <div className="vibe">🌐 {translations.lang}</div>
+                  <p>{translations.texts[i]}</p>
+                  <div className="acts">
+                    <button className={copied === 100 + i ? "done" : ""} onClick={() => copy(translations.texts[i], 100 + i)}>
+                      {copied === 100 + i ? "✓ Copied" : "Copy"}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           ))}
           <p className="tip">💡 {result.tip}</p>

@@ -16,6 +16,21 @@ export const LANGUAGES = [
   "Bengali",
   "Gujarati",
   "Punjabi",
+  // World languages
+  "Spanish",
+  "French",
+  "Italian",
+  "German",
+  "Portuguese",
+  "Dutch",
+  "Russian",
+  "Arabic",
+  "Turkish",
+  "Japanese",
+  "Korean",
+  "Chinese",
+  "Indonesian",
+  "Urdu",
 ] as const;
 export type Tone = (typeof TONES)[number];
 export type Language = (typeof LANGUAGES)[number];
@@ -106,6 +121,7 @@ Never use these AI giveaways:
   - Hinglish: Hindi and English mixed, written in Roman script, the way urban Indians text ("acha toh weekend pe kya scene hai?").
   - Tanglish: Tamil and English mixed, in Roman script.
   - Any other Indian language: write in that language's native script unless the user's chat is in Roman script, in which case match it.
+  - World languages (Spanish, French, Japanese, etc.): write the way young native speakers casually text, with their everyday slang and abbreviations, not textbook phrasing. Chinese means Simplified Chinese.
 - Vary the 4 replies: e.g. one playful, one that asks a question, one that moves toward a plan or date when it fits, one wildcard.
 
 Boundaries:
@@ -235,4 +251,50 @@ export function humanize(t: string): string {
   // Real people rarely end a text with a single full stop (but keep "..." and abbreviations like "etc.").
   if (/[^.]\.$/.test(s) && !/\b(etc|vs|mr|mrs|dr)\.$/i.test(s)) s = s.slice(0, -1);
   return s.trim();
+}
+
+export const TRANSLATE_SYSTEM = `You translate dating-chat text messages so they read like a native speaker typed them on their phone.
+
+Rules:
+- Translate each message into the target language. Keep the same meaning, tone, flirtiness and humour.
+- Sound natural and casual, the way young native speakers actually text. Swap slang and idioms for local equivalents instead of translating word for word.
+- Keep the same length, emojis and casing style (if the original is lowercase, keep it lowercase where the language allows).
+- Never add explanations, quotes, notes or alternatives. Never use em dashes or semicolons.
+- Hinglish means Hindi and English mixed in Roman script. Tanglish means Tamil and English mixed in Roman script. Other Indian languages use their native script. Chinese means Simplified Chinese.
+- If a message is already in the target language, just polish it lightly.
+- Return the translations in the same order as the input.`;
+
+export const TRANSLATE_SCHEMA = {
+  type: "object",
+  properties: { translations: { type: "array", items: { type: "string" } } },
+  required: ["translations"],
+  additionalProperties: false,
+} as const;
+
+export function translatePrompt(texts: string[], language: string): string {
+  return `Target language: ${language}\n\nMessages (JSON array):\n${JSON.stringify(texts)}`;
+}
+
+export function cleanTranslations(raw: unknown, count: number): string[] {
+  const list = (raw as { translations?: unknown })?.translations;
+  if (!Array.isArray(list) || list.length < count) throw new Error("Bad translation output");
+  return list.slice(0, count).map((t) => humanize(String(t ?? "")));
+}
+
+export async function translateWithClaude(texts: string[], language: string): Promise<string[]> {
+  const response = await client.beta.messages.create({
+    model: "claude-opus-5-5",
+    max_tokens: 4000,
+    system: TRANSLATE_SYSTEM,
+    messages: [{ role: "user", content: translatePrompt(texts, language) }],
+    output_config: { effort: "low", format: { type: "json_schema", schema: TRANSLATE_SCHEMA } },
+    betas: ["server-side-fallback-2026-07-01"],
+    fallbacks: "default",
+  });
+  if (response.stop_reason === "refusal") throw new RefusedError("refused");
+  const text = response.content
+    .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text")
+    .map((b) => b.text)
+    .join("");
+  return cleanTranslations(JSON.parse(text), texts.length);
 }

@@ -29,7 +29,7 @@ const STEPS: Step[] = [
   {
     target: "language",
     title: "4. Pick a language",
-    body: "Get replies in English, Hinglish, Hindi, Tamil, Telugu and more, written the way people actually text.",
+    body: "Get replies in English, Hinglish, Hindi, Tamil and other Indian languages. Tap 🌍 More languages for Spanish, French, Japanese and more. After you get replies, you can also translate them into any of these.",
   },
   {
     target: "goal",

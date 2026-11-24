@@ -1,4 +1,4 @@
-import { SCHEMA, SYSTEM, RefusedError, normalize, userPrompt, type ImageInput, type MatchContext, type ReplyResult } from "./claude";
+import { SCHEMA, SYSTEM, TRANSLATE_SCHEMA, TRANSLATE_SYSTEM, cleanTranslations, translatePrompt, RefusedError, normalize, userPrompt, type ImageInput, type MatchContext, type ReplyResult } from "./claude";
 
 const API = "https://generativelanguage.googleapis.com/v1beta/models";
 
@@ -47,10 +47,37 @@ export async function generateWithGemini(input: {
     },
   });
 
-  // Google's free tier is often slow or answers 503 "high demand". Instead of waiting on one
-  // request, run a staggered race: start the first model, and if it hasn't answered within a
-  // few seconds (or fails), start the next one too. The first good answer wins and the rest
-  // are cancelled.
+  return race(key, body, (text) => {
+    const parsed = JSON.parse(text) as ReplyResult; // malformed output throws and counts as a failed attempt
+    parsed.replies = (parsed.replies ?? []).filter((r) => r.text?.trim()).slice(0, 4);
+    if (!parsed.replies.length) throw new Error("No replies returned");
+    return normalize(parsed);
+  });
+}
+
+export async function translateWithGemini(texts: string[], language: string): Promise<string[]> {
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) throw new Error("GEMINI_API_KEY is not set");
+  const body = JSON.stringify({
+    system_instruction: { parts: [{ text: TRANSLATE_SYSTEM }] },
+    contents: [{ role: "user", parts: [{ text: translatePrompt(texts, language) }] }],
+    generationConfig: {
+      responseMimeType: "application/json",
+      responseJsonSchema: TRANSLATE_SCHEMA,
+      temperature: 0.7,
+      maxOutputTokens: 2048,
+    },
+  });
+  return race(key, body, (text) => cleanTranslations(JSON.parse(text), texts.length));
+}
+
+/**
+ * Google's free tier is often slow or answers 503 "high demand". Instead of waiting on one
+ * request, run a staggered race: start the first model, and if it hasn't answered within a
+ * few seconds (or fails), start the next one too. The first good answer wins and the rest
+ * are cancelled.
+ */
+async function race<T>(key: string, body: string, parse: (text: string) => T): Promise<T> {
   const list = models();
   const plan = [...list, ...list].slice(0, Math.max(4, list.length)); // second round reuses models
   const HEDGE_MS = 3500;
@@ -59,7 +86,7 @@ export async function generateWithGemini(input: {
   let quotaHits = 0;
   let lastErr: Error = new Error("No Gemini model configured");
 
-  const attempt = async (model: string, ctrl: AbortController): Promise<ReplyResult> => {
+  const attempt = async (model: string, ctrl: AbortController): Promise<T> => {
     const res = await fetch(`${API}/${encodeURIComponent(model)}:generateContent`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-goog-api-key": key },
@@ -78,21 +105,18 @@ export async function generateWithGemini(input: {
     const cand = data.candidates?.[0];
     if (cand?.finishReason === "SAFETY" || cand?.finishReason === "PROHIBITED_CONTENT") throw new RefusedError("safety");
     const text = cand?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
-    const parsed = JSON.parse(text) as ReplyResult; // malformed output throws and counts as a failed attempt
-    parsed.replies = (parsed.replies ?? []).filter((r) => r.text?.trim()).slice(0, 4);
-    if (!parsed.replies.length) throw new Error("No replies returned");
-    return normalize(parsed);
+    return parse(text);
   };
 
   try {
-    return await new Promise<ReplyResult>((resolve, reject) => {
+    return await new Promise<T>((resolve, reject) => {
       let next = 0;
       let running = 0;
       let done = false;
       let hedgeTimer: ReturnType<typeof setTimeout> | null = null;
       const deadline = setTimeout(() => finish(null, new BusyError("deadline")), DEADLINE_MS);
 
-      const finish = (value: ReplyResult | null, err?: Error) => {
+      const finish = (value: T | null, err?: Error) => {
         if (done) return;
         done = true;
         clearTimeout(deadline);
