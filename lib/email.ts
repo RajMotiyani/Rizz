@@ -3,7 +3,7 @@
  * Without BREVO_API_KEY (local dev), the code is printed to the server log instead.
  */
 export async function sendLoginCode(to: string, code: string): Promise<void> {
-  const key = (process.env.BREVO_API_KEY ?? process.env.BREVO_KEY);
+  const key = (process.env.BREVO_API_KEY ?? process.env.BREVO_KEY_1 ?? process.env.BREVO_KEY);
   const from = process.env.EMAIL_FROM;
   if (!key || !from) {
     if (process.env.NODE_ENV === "production" && process.env.AUTH_DEV_LOG !== "1") {
