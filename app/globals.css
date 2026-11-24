@@ -69,3 +69,6 @@ textarea { min-height: 130px; }
 .install span { flex: 1; }
 .install button { border: 0; border-radius: 10px; padding: 7px 12px; background: var(--accent); color: #fff; font-weight: 700; cursor: pointer; }
 .install button.x { background: transparent; color: var(--muted); font-size: 18px; padding: 0 4px; }
+.steps { padding-left: 20px; color: var(--text); line-height: 1.6; margin: 12px 0 6px; }
+.steps li { margin-bottom: 8px; }
+.steps b { color: var(--accent2); }

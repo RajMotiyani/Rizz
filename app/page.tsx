@@ -115,25 +115,53 @@ export default function Home() {
     }
   }
 
-  // Install-to-home-screen support.
+  // Install-to-home-screen support. Android Chrome fires beforeinstallprompt (one-tap install);
+  // everywhere else we show the right manual steps for the user's phone and browser.
   const [installEvt, setInstallEvt] = useState<(Event & { prompt: () => Promise<void> }) | null>(null);
-  const [iosHint, setIosHint] = useState(false);
+  const [platform, setPlatform] = useState<"android" | "ios" | "inapp" | "desktop">("desktop");
+  const [installed, setInstalled] = useState(false);
+  const [bannerOff, setBannerOff] = useState(true);
+  const [installHelp, setInstallHelp] = useState(false);
   useEffect(() => {
     if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
-    const standalone = window.matchMedia("(display-mode: standalone)").matches || (navigator as unknown as { standalone?: boolean }).standalone;
-    if (standalone || localStorage.getItem("rizz_install_dismissed")) return;
+    const ua = navigator.userAgent;
+    const standalone =
+      window.matchMedia("(display-mode: standalone)").matches ||
+      (navigator as unknown as { standalone?: boolean }).standalone === true;
+    setInstalled(!!standalone);
+    setPlatform(
+      /Instagram|FBAN|FBAV|FB_IAB|WhatsApp|Snapchat|Line\/|; wv\)/i.test(ua)
+        ? "inapp"
+        : /iphone|ipad|ipod/i.test(ua) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(ua))
+          ? "ios"
+          : /android/i.test(ua)
+            ? "android"
+            : "desktop",
+    );
+    setBannerOff(!!standalone || localStorage.getItem("rizz_install_dismissed") === "1");
     const onPrompt = (e: Event) => {
       e.preventDefault();
       setInstallEvt(e as Event & { prompt: () => Promise<void> });
     };
+    const onInstalled = () => setInstalled(true);
     window.addEventListener("beforeinstallprompt", onPrompt);
-    if (/iphone|ipad|ipod/i.test(navigator.userAgent)) setIosHint(true);
-    return () => window.removeEventListener("beforeinstallprompt", onPrompt);
+    window.addEventListener("appinstalled", onInstalled);
+    return () => {
+      window.removeEventListener("beforeinstallprompt", onPrompt);
+      window.removeEventListener("appinstalled", onInstalled);
+    };
   }, []);
   function dismissInstall() {
     localStorage.setItem("rizz_install_dismissed", "1");
-    setInstallEvt(null);
-    setIosHint(false);
+    setBannerOff(true);
+  }
+  async function install() {
+    if (installEvt) {
+      await installEvt.prompt();
+      setInstallEvt(null);
+    } else {
+      setInstallHelp(true);
+    }
   }
 
   useEffect(() => {
@@ -241,14 +269,10 @@ export default function Home() {
           {status && <span className="badge">{status.left}/{status.limit} left</span>}
         </div>
       </div>
-      {(installEvt || iosHint) && (
+      {!installed && !bannerOff && platform !== "desktop" && (
         <div className="install">
-          <span>
-            {installEvt ? "📲 Add Rizz to your home screen" : "📲 Install: tap Share, then “Add to Home Screen”"}
-          </span>
-          {installEvt && (
-            <button onClick={async () => { await installEvt.prompt(); dismissInstall(); }}>Install</button>
-          )}
+          <span>📲 Get Rizz on your home screen</span>
+          <button onClick={install}>Install</button>
           <button className="x" aria-label="Dismiss" onClick={dismissInstall}>×</button>
         </div>
       )}
@@ -351,8 +375,48 @@ export default function Home() {
       <footer className="foot">
         100% free. Rizz never stores your screenshots; they are sent to Google Gemini to write replies.
         <br />Be kind. Respect a no. 💜
+        {!installed && (
+          <>
+            <br />
+            <button className="link" onClick={install}>📲 Install Rizz as an app</button>
+          </>
+        )}
       </footer>
 
+      {installHelp && (
+        <div className="sheet-bg" onClick={() => setInstallHelp(false)}>
+          <div className="sheet" onClick={(e) => e.stopPropagation()}>
+            <h2>Install Rizz 📲</h2>
+            {platform === "inapp" ? (
+              <ol className="steps">
+                <li>You&apos;re inside another app&apos;s browser (like Instagram or WhatsApp), which can&apos;t install apps.</li>
+                <li>Tap the <b>⋮</b> or <b>…</b> menu at the top and choose <b>Open in Chrome</b> / <b>Open in browser</b> (on iPhone, <b>Open in Safari</b>).</li>
+                <li>Then tap <b>Install</b> again.</li>
+              </ol>
+            ) : platform === "ios" ? (
+              <ol className="steps">
+                <li>Tap the <b>Share</b> button <span aria-hidden>(square with an arrow ⬆️)</span>. In Safari it&apos;s at the bottom; in Chrome it&apos;s at the top right.</li>
+                <li>Scroll down and tap <b>Add to Home Screen</b>.</li>
+                <li>Tap <b>Add</b>. Rizz appears on your home screen.</li>
+              </ol>
+            ) : platform === "android" ? (
+              <ol className="steps">
+                <li>Tap the <b>⋮</b> menu at the top right of Chrome.</li>
+                <li>Tap <b>Add to Home screen</b> or <b>Install app</b>.</li>
+                <li>Tap <b>Install</b>. Rizz appears on your home screen.</li>
+                <li>Using Samsung Internet? Tap <b>☰</b> at the bottom, then <b>Add page to</b> → <b>Home screen</b>.</li>
+              </ol>
+            ) : (
+              <ol className="steps">
+                <li>Open this page on your phone: <b>{typeof window !== "undefined" ? window.location.host : ""}</b></li>
+                <li>On Android: Chrome <b>⋮</b> menu → <b>Add to Home screen</b>.</li>
+                <li>On iPhone: Safari <b>Share</b> → <b>Add to Home Screen</b>.</li>
+              </ol>
+            )}
+            <button className="ghost" onClick={() => setInstallHelp(false)}>Got it</button>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
