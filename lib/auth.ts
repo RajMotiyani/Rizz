@@ -105,7 +105,7 @@ export async function endSession() {
  */
 export function authEnabled(): boolean {
   // Needs email sending AND the user database, so accounts are never kept in temporary storage.
-  return (!!(process.env.BREVO_API_KEY && process.env.EMAIL_FROM) && dbConfigured()) || process.env.AUTH_DEV_LOG === "1";
+  return (!!((process.env.BREVO_API_KEY ?? process.env.BREVO_KEY) && process.env.EMAIL_FROM) && dbConfigured()) || process.env.AUTH_DEV_LOG === "1";
 }
 
 /** The logged-in user, or null. When login is off, an anonymous per-device user. */

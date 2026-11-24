@@ -29,7 +29,7 @@ export async function GET() {
     }
   }
   return NextResponse.json({
-    login: authEnabled() ? "on" : `off (missing: ${[["BREVO_API_KEY", process.env.BREVO_API_KEY], ["EMAIL_FROM", process.env.EMAIL_FROM], ["SUPABASE_URL", process.env.SUPABASE_URL], ["SUPABASE_SERVICE_ROLE_KEY", process.env.SUPABASE_SERVICE_ROLE_KEY]].filter(([, v]) => !v).map(([k]) => k).join(", ")})`,
+    login: authEnabled() ? "on" : `off (missing: ${[["BREVO_API_KEY", (process.env.BREVO_API_KEY ?? process.env.BREVO_KEY)], ["EMAIL_FROM", process.env.EMAIL_FROM], ["SUPABASE_URL", process.env.SUPABASE_URL], ["SUPABASE_SERVICE_ROLE_KEY", process.env.SUPABASE_SERVICE_ROLE_KEY]].filter(([, v]) => !v).map(([k]) => k).join(", ")})`,
     database,
     gemini,
     provider: process.env.AI_PROVIDER ?? (key ? "gemini" : "claude"),
