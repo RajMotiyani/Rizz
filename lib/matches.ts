@@ -49,8 +49,8 @@ export function trend(m: Match): "up" | "down" | "flat" | null {
 }
 
 export const VERDICTS: Record<Verdict, { label: string; color: string }> = {
-  ask_out: { label: "💘 Ask them out", color: "#3ddc97" },
-  keep_going: { label: "🙂 Keep it going", color: "#ffd166" },
-  slow_down: { label: "🐢 Slow down", color: "#ff9a5a" },
-  move_on: { label: "👋 Time to move on", color: "#ff6b6b" },
+  ask_out: { label: "💘 Ask them out", color: "var(--ok)" },
+  keep_going: { label: "🙂 Keep it going", color: "var(--warn)" },
+  slow_down: { label: "🐢 Slow down", color: "var(--accent2)" },
+  move_on: { label: "👋 Time to move on", color: "var(--bad)" },
 };

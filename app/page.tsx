@@ -13,6 +13,14 @@ const TONES = [
   { id: "chill", label: "🧊 Chill" },
 ] as const;
 
+const THEMES = [
+  { id: "love", name: "💘 Love", desc: "Romantic rose, after dark", sw: ["#14101f", "#ff4f8b", "#ff9a5a"] },
+  { id: "friendship", name: "🤝 Friendship", desc: "Sunny and easygoing", sw: ["#fff8e7", "#f77f00", "#f4a259"] },
+  { id: "colleague", name: "💼 Colleague", desc: "Clean and professional", sw: ["#f3f5f9", "#2563eb", "#0ea5e9"] },
+  { id: "family", name: "🏡 Family", desc: "Warm and homely", sw: ["#f6efe6", "#c8553d", "#e09f3e"] },
+  { id: "night", name: "🌙 Night Owl", desc: "Late-night neon", sw: ["#070b1a", "#7c5cff", "#22d3ee"] },
+] as const;
+
 const LANGS = [
   "English", "Hinglish", "Hindi", "Tanglish", "Tamil", "Telugu",
   "Kannada", "Malayalam", "Marathi", "Bengali", "Gujarati", "Punjabi",
@@ -99,6 +107,20 @@ export default function Home() {
     const r = await fetch("/api/me");
     if (r.ok) setStatus(await r.json());
   }, []);
+
+  // Colour theme, saved on this phone. The <head> script in layout.tsx applies it before first paint.
+  const [theme, setTheme] = useState("love");
+  const [themeOpen, setThemeOpen] = useState(false);
+  useEffect(() => {
+    setTheme(localStorage.getItem("rizz_theme") || "love");
+  }, []);
+  function pickTheme(id: string) {
+    setTheme(id);
+    localStorage.setItem("rizz_theme", id);
+    document.documentElement.dataset.theme = id;
+    const bg = THEMES.find((t) => t.id === id)?.sw[0];
+    if (bg) document.querySelector('meta[name="theme-color"]')?.setAttribute("content", bg);
+  }
 
   // Background music that follows the selected vibe. On by default; browsers only allow
   // sound after the first tap, so it starts on the first interaction.
@@ -319,6 +341,7 @@ export default function Home() {
           <span>Rizz</span> ✨
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <button className="badge" onClick={() => setThemeOpen(true)} aria-label="Change theme">🎨</button>
           <button
             className="badge"
             onClick={toggleMusic}
@@ -486,6 +509,27 @@ export default function Home() {
         )}
       </footer>
 
+      {themeOpen && (
+        <div className="sheet-bg" onClick={() => setThemeOpen(false)}>
+          <div className="sheet" onClick={(e) => e.stopPropagation()}>
+            <h2>Pick a theme 🎨</h2>
+            <div className="themes">
+              {THEMES.map((t) => (
+                <button key={t.id} className={`theme-opt ${theme === t.id ? "on" : ""}`} onClick={() => pickTheme(t.id)}>
+                  <div className="sw" style={{ background: t.sw[0], border: "1px solid #0002" }}>
+                    <i style={{ background: t.sw[1] }} />
+                    <i style={{ background: t.sw[2] }} />
+                  </div>
+                  <b>{t.name}</b>
+                  <small>{t.desc}</small>
+                </button>
+              ))}
+            </div>
+            <button className="ghost" onClick={() => setThemeOpen(false)}>Done</button>
+          </div>
+        </div>
+      )}
+
       {installHelp && (
         <div className="sheet-bg" onClick={() => setInstallHelp(false)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
@@ -532,7 +576,7 @@ function InterestMeter({ result, match }: { result: Result; match: Match | null 
   const solid = !!match && n >= SOLID_AFTER;
   const t = match ? trend(match) : null;
   const v = VERDICTS[a.verdict] ?? VERDICTS.keep_going;
-  const color = score >= 70 ? "#3ddc97" : score >= 45 ? "#ffd166" : "#ff6b6b";
+  const color = score >= 70 ? "var(--ok)" : score >= 45 ? "var(--warn)" : "var(--bad)";
   return (
     <div className="meter">
       <div className="meter-top">
