@@ -129,3 +129,11 @@ textarea { min-height: 130px; }
 .theme-opt .sw i { width: 14px; height: 14px; border-radius: 50%; display: inline-block; }
 .theme-opt b { display: block; font-size: 15px; }
 .theme-opt small { color: var(--muted); font-size: 12px; }
+.center { min-height: 80vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; }
+.spinner.big { width: 28px; height: 28px; border-color: var(--border); border-top-color: var(--accent); }
+.phone { display: flex; align-items: center; background: var(--card2); border: 1px solid var(--border); border-radius: 12px; }
+.phone span { padding: 0 4px 0 12px; color: var(--muted); font-weight: 600; }
+.phone input { border: 0; background: transparent; }
+.code { font-size: 28px; letter-spacing: 10px; text-align: center; font-weight: 800; }
+.row-links { display: flex; justify-content: space-between; margin-top: 14px; }
+.link:disabled { opacity: .5; cursor: default; text-decoration: none; }

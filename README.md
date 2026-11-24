@@ -36,3 +36,17 @@ npm run dev                  # http://localhost:3000
 - `lib/gemini.ts`: Gemini call; `lib/claude.ts`: prompt, schema and optional Claude call; `lib/ai.ts`: picks the provider
 - `lib/usage.ts`: daily limits; `lib/store.ts`: Redis/file storage; `lib/session.ts`: anonymous device cookie
 - `app/api/reply`, `app/api/me`: API routes
+
+## Login and user database
+Users log in with email + mobile number; a 6-digit code is emailed to them (Brevo, free 300/day).
+Users are stored in Supabase (free). Login turns on automatically once `BREVO_API_KEY` and `EMAIL_FROM` are set.
+
+1. **Supabase:** create a free project at supabase.com → SQL Editor → New query → paste `supabase/schema.sql` → Run.
+   Then Project Settings → API (or API Keys): copy the Project URL and the **secret** (service role) key.
+2. **Brevo:** sign up at brevo.com → Senders, Domains & Dedicated IPs → add and verify your sender email →
+   SMTP & API → API Keys → Generate.
+3. In Vercel add `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `BREVO_API_KEY`, `EMAIL_FROM` (your verified sender), then redeploy.
+4. Check `/api/health`: `login` should be `on` and `database` should be `working`.
+
+**Reviewing users:** Supabase → Table Editor → `users` (email, phone, signup date, last login, logins, replies used).
+Use the Export button for a CSV. Chats and screenshots are never stored.

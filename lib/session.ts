@@ -4,7 +4,7 @@ import { cookies, headers } from "next/headers";
 const COOKIE = "rizz_id";
 
 let warned = false;
-function secret() {
+export function secret() {
   const s = process.env.SESSION_SECRET;
   if (s && s !== "change-me") return s;
   // The cookie only guards daily limits, so rather than take the app down, derive a

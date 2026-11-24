@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { authEnabled } from "@/lib/auth";
+import { db, dbConfigured } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -17,13 +19,23 @@ export async function GET() {
       gemini = "unreachable";
     }
   }
+  let database = dbConfigured() ? "set" : "not set";
+  if (dbConfigured()) {
+    try {
+      await db("users?select=id&limit=1");
+      database = "working";
+    } catch (e) {
+      database = `error: ${(e as Error).message.slice(0, 120)}`;
+    }
+  }
   return NextResponse.json({
+    login: authEnabled() ? "on" : "off (add BREVO_API_KEY and EMAIL_FROM)",
+    database,
     gemini,
     provider: process.env.AI_PROVIDER ?? (key ? "gemini" : "claude"),
     sessionSecret: process.env.SESSION_SECRET ? "set" : "missing",
     redis: process.env.UPSTASH_REDIS_REST_URL ? "set" : "not set",
     // Names only (never values), to spot typos like a trailing space.
-    relatedNames: Object.keys(process.env).filter((k) => /gemini|session|secret/i.test(k)).map((k) => JSON.stringify(k)),
     commit: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? null,
     env: process.env.VERCEL_ENV ?? null,
   });

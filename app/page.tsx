@@ -30,7 +30,7 @@ type Img = { mediaType: string; data: string; preview: string };
 type Reply = { text: string; vibe: string };
 type Analysis = { interest: number; green: string[]; red: string[]; verdict: Verdict; nextMove: string; memory: string };
 type Result = { read: string; replies: Reply[]; tip: string; analysis: Analysis };
-type Status = { used: number; left: number; limit: number };
+type Status = { used: number; left: number; limit: number; email?: string };
 
 /** Shrink screenshots in the browser so uploads are fast on mobile data. */
 async function toImg(file: File): Promise<Img> {
@@ -103,10 +103,26 @@ export default function Home() {
   const [status, setStatus] = useState<Status | null>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
 
+  // null = still checking, false = needs to log in, true = logged in
+  const [authed, setAuthed] = useState<boolean | null>(null);
   const refresh = useCallback(async () => {
-    const r = await fetch("/api/me");
-    if (r.ok) setStatus(await r.json());
+    try {
+      const r = await fetch("/api/me");
+      if (r.status === 401) return setAuthed(false);
+      if (r.ok) {
+        setStatus(await r.json());
+        setAuthed(true);
+      }
+    } catch {
+      setAuthed((a) => a ?? false);
+    }
   }, []);
+  async function logout() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    setStatus(null);
+    setResult(null);
+    setAuthed(false);
+  }
 
   // Colour theme, saved on this phone. The <head> script in layout.tsx applies it before first paint.
   const [theme, setTheme] = useState("love");
@@ -290,7 +306,11 @@ export default function Home() {
         }),
       });
       const data = await r.json();
-      if (data.status) setStatus(data.status);
+      if (r.status === 401) {
+        setAuthed(false);
+        return;
+      }
+      if (data.status) setStatus((s) => ({ ...s, ...data.status }));
       if (!r.ok) throw new Error(data.error || "Something went wrong.");
       setResult(data.result);
       setResultMatchId(selected?.id ?? null);
@@ -333,6 +353,16 @@ export default function Home() {
     setCopied(i);
   }
 
+
+  if (authed === null) {
+    return (
+      <main className="wrap center">
+        <div className="logo"><span>Rizz</span> ✨</div>
+        <span className="spinner big" />
+      </main>
+    );
+  }
+  if (!authed) return <Login onDone={refresh} />;
 
   return (
     <main className="wrap">
@@ -501,6 +531,13 @@ export default function Home() {
       <footer className="foot">
         100% free. Rizz never stores your screenshots; they are sent to Google Gemini to write replies.
         <br />Be kind. Respect a no. 💜
+        {status?.email && (
+          <>
+            <br />
+            Logged in as {status.email} ·{" "}
+            <button className="link inline" onClick={logout}>Log out</button>
+          </>
+        )}
         {!installed && (
           <>
             <br />
@@ -604,5 +641,112 @@ function InterestMeter({ result, match }: { result: Result; match: Match | null 
       )}
       {!match && <p className="hint">Tip: add this person above to track their interest over 3+ chats.</p>}
     </div>
+  );
+}
+
+function Login({ onDone }: { onDone: () => void }) {
+  const [step, setStep] = useState<"details" | "code">("details");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [cooldown, setCooldown] = useState(0);
+
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const t = setTimeout(() => setCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [cooldown]);
+
+  async function sendCode() {
+    setError("");
+    setBusy(true);
+    try {
+      const r = await fetch("/api/auth/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, phone }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error);
+      setStep("code");
+      setCode("");
+      setCooldown(30);
+    } catch (e) {
+      setError(e instanceof Error && e.message ? e.message : "Couldn't send the code.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function verify(value = code) {
+    if (value.length !== 6) return;
+    setError("");
+    setBusy(true);
+    try {
+      const r = await fetch("/api/auth/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, code: value }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error);
+      onDone();
+    } catch (e) {
+      setError(e instanceof Error && e.message ? e.message : "Couldn't verify the code.");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <main className="wrap">
+      <div className="top">
+        <div className="logo"><span>Rizz</span> ✨</div>
+      </div>
+      <p className="hero">Your AI wingman for dating chats. Log in to get started, it&apos;s free.</p>
+      <section className="card">
+        {step === "details" ? (
+          <form onSubmit={(e) => { e.preventDefault(); sendCode(); }}>
+            <p className="label">Email</p>
+            <input type="text" inputMode="email" autoComplete="email" placeholder="you@example.com"
+              value={email} onChange={(e) => setEmail(e.target.value)} />
+            <p className="label" style={{ marginTop: 14 }}>Mobile number</p>
+            <div className="phone">
+              <span>+91</span>
+              <input type="text" inputMode="tel" autoComplete="tel-national" placeholder="98765 43210"
+                value={phone} maxLength={16} onChange={(e) => setPhone(e.target.value)} />
+            </div>
+            <button className="cta" style={{ marginTop: 18 }} disabled={busy || !email || !phone}>
+              {busy ? (<><span className="spinner" />Sending code…</>) : "Send login code"}
+            </button>
+            <p className="hint">We&apos;ll email you a 6-digit code. Your mobile number is saved with your account.</p>
+          </form>
+        ) : (
+          <form onSubmit={(e) => { e.preventDefault(); verify(); }}>
+            <p className="label">Enter the code</p>
+            <p className="hint" style={{ marginTop: 0, marginBottom: 12 }}>We sent a 6-digit code to <b>{email}</b>. Check spam if you don&apos;t see it.</p>
+            <input className="code" type="text" inputMode="numeric" autoComplete="one-time-code" placeholder="••••••"
+              value={code} maxLength={6} autoFocus
+              onChange={(e) => {
+                const v = e.target.value.replace(/\D/g, "").slice(0, 6);
+                setCode(v);
+                if (v.length === 6) verify(v);
+              }} />
+            <button className="cta" style={{ marginTop: 18 }} disabled={busy || code.length !== 6}>
+              {busy ? (<><span className="spinner" />Checking…</>) : "Log in"}
+            </button>
+            <div className="row-links">
+              <button type="button" className="link inline" disabled={cooldown > 0 || busy} onClick={sendCode}>
+                {cooldown > 0 ? `Resend code in ${cooldown}s` : "Resend code"}
+              </button>
+              <button type="button" className="link inline" onClick={() => { setStep("details"); setError(""); }}>Change email</button>
+            </div>
+          </form>
+        )}
+        {error && <p className="err">{error}</p>}
+      </section>
+      <footer className="foot">By logging in you agree to be kind. Rizz never stores your chats or screenshots.</footer>
+    </main>
   );
 }

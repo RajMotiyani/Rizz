@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
-import { clientIp, deviceId } from "@/lib/session";
+import { clientIp } from "@/lib/session";
+import { currentUser, recordReply } from "@/lib/auth";
 import { claim, status } from "@/lib/usage";
 import { LANGUAGES, RefusedError, TONES } from "@/lib/claude";
 import { generateReplies } from "@/lib/ai";
@@ -37,6 +38,8 @@ const Body = z.object({
 });
 
 export async function POST(req: Request) {
+  const user = await currentUser();
+  if (!user) return NextResponse.json({ error: "Please log in again.", code: "auth" }, { status: 401 });
   let body: z.infer<typeof Body>;
   try {
     body = Body.parse(await req.json());
@@ -51,7 +54,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Rizz isn't set up yet: the AI key is missing on the server." }, { status: 503 });
   }
 
-  const id = await deviceId();
+  const id = user.id;
   const c = await claim(id, await clientIp());
   if (!c.ok) {
     return NextResponse.json(
@@ -62,6 +65,7 @@ export async function POST(req: Request) {
 
   try {
     const result = await generateReplies({ ...body, chatText: body.chatText.trim(), goal: body.goal.trim() });
+    if (user.email) await recordReply(id);
     return NextResponse.json({ result, status: await status(id) });
   } catch (err) {
     await c.release();

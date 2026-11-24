@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { db, dbConfigured, rpc } from "./db";
 
 /**
  * Tiny key-value store. Uses Upstash Redis (REST) when configured, which is what you
@@ -105,13 +106,41 @@ class FileStore implements Store {
   }
 }
 
+/** Uses the Supabase kv table (see supabase/schema.sql), so limits are shared across servers. */
+class SupabaseStore implements Store {
+  async get(key: string) {
+    const rows = await db<{ value: string; expires_at: string | null }[]>(
+      `kv?key=eq.${encodeURIComponent(key)}&select=value,expires_at`,
+    );
+    const r = rows[0];
+    if (!r || (r.expires_at && new Date(r.expires_at).getTime() < Date.now())) return null;
+    return r.value;
+  }
+  async set(key: string, value: string, ttl?: number) {
+    await db("kv", {
+      method: "POST",
+      prefer: "resolution=merge-duplicates,return=minimal",
+      body: { key, value, expires_at: ttl ? new Date(Date.now() + ttl * 1000).toISOString() : null },
+    });
+  }
+  async incr(key: string, ttl: number) {
+    return Number(await rpc("kv_incr", { k: key, ttl_seconds: ttl, delta: 1 }));
+  }
+  async decr(key: string) {
+    return Number(await rpc("kv_incr", { k: key, ttl_seconds: 172800, delta: -1 }));
+  }
+  async del(key: string) {
+    await db(`kv?key=eq.${encodeURIComponent(key)}`, { method: "DELETE", prefer: "return=minimal" });
+  }
+}
+
 const g = globalThis as unknown as { __rizzStore?: Store };
 
 export function store(): Store {
   if (!g.__rizzStore) {
     const url = process.env.UPSTASH_REDIS_REST_URL;
     const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-    g.__rizzStore = url && token ? new UpstashStore(url, token) : new FileStore();
+    g.__rizzStore = url && token ? new UpstashStore(url, token) : dbConfigured() ? new SupabaseStore() : new FileStore();
   }
   return g.__rizzStore;
 }
