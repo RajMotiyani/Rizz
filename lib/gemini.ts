@@ -11,6 +11,8 @@ function models(): string[] {
 }
 
 export class QuotaError extends Error {}
+/** Gemini kept failing with temporary errors (overloaded, timeouts). */
+export class BusyError extends Error {}
 
 type GeminiResponse = {
   candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[];
@@ -44,17 +46,38 @@ export async function generateWithGemini(input: {
     },
   });
 
+  // Google's free tier often answers 503 "high demand". Retry with a short backoff,
+  // alternating between models, before giving up.
+  const list = models();
+  const attempts = Math.max(5, list.length);
+  const started = Date.now();
   let lastErr: Error = new Error("No Gemini model configured");
-  for (const model of models()) {
-    const res = await fetch(`${API}/${encodeURIComponent(model)}:generateContent`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-goog-api-key": key },
-      body,
-      cache: "no-store",
-    });
-    if (res.status === 429 || res.status === 404) {
-      // Free quota used up (or model not available): try the next model.
-      lastErr = res.status === 429 ? new QuotaError(`${model} quota`) : new Error(`${model} not found`);
+  let quotaHits = 0;
+  for (let i = 0; i < attempts && Date.now() - started < 40_000; i++) {
+    const model = list[i % list.length];
+    if (i > 0) await new Promise((r) => setTimeout(r, Math.min(400 * 2 ** (i - 1), 3000) + Math.random() * 300));
+    let res: Response;
+    try {
+      res = await fetch(`${API}/${encodeURIComponent(model)}:generateContent`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+        body,
+        cache: "no-store",
+        signal: AbortSignal.timeout(25_000),
+      });
+    } catch (e) {
+      lastErr = e instanceof Error ? e : new Error(String(e));
+      console.warn(`Gemini ${model} network error, retrying`, lastErr.message);
+      continue;
+    }
+    if (res.status === 429) {
+      quotaHits++;
+      lastErr = new QuotaError(`${model} quota`);
+      continue;
+    }
+    if (res.status === 404 || res.status >= 500) {
+      lastErr = new BusyError(`${model} ${res.status}`);
+      console.warn(`Gemini ${model} ${res.status}, retrying`);
       continue;
     }
     if (!res.ok) throw new Error(`Gemini ${res.status}: ${(await res.text()).slice(0, 300)}`);
@@ -63,10 +86,17 @@ export async function generateWithGemini(input: {
     const cand = data.candidates?.[0];
     if (cand?.finishReason === "SAFETY" || cand?.finishReason === "PROHIBITED_CONTENT") throw new RefusedError("safety");
     const text = cand?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
-    const parsed = JSON.parse(text) as ReplyResult;
-    parsed.replies = (parsed.replies ?? []).filter((r) => r.text?.trim()).slice(0, 4);
-    if (!parsed.replies.length) throw new Error("No replies returned");
-    return normalize(parsed);
+    try {
+      const parsed = JSON.parse(text) as ReplyResult;
+      parsed.replies = (parsed.replies ?? []).filter((r) => r.text?.trim()).slice(0, 4);
+      if (!parsed.replies.length) throw new Error("No replies returned");
+      return normalize(parsed);
+    } catch (e) {
+      // Truncated or malformed output: try again.
+      lastErr = e instanceof Error ? e : new Error(String(e));
+      console.warn(`Gemini ${model} bad output (${cand?.finishReason}), retrying`);
+    }
   }
-  throw lastErr;
+  if (quotaHits >= list.length && !(lastErr instanceof BusyError)) throw new QuotaError("all models out of quota");
+  throw lastErr instanceof QuotaError ? lastErr : new BusyError(lastErr.message);
 }

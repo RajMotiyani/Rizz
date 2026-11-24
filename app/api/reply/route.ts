@@ -5,7 +5,7 @@ import { clientIp, deviceId } from "@/lib/session";
 import { claim, status } from "@/lib/usage";
 import { LANGUAGES, RefusedError, TONES } from "@/lib/claude";
 import { generateReplies } from "@/lib/ai";
-import { QuotaError } from "@/lib/gemini";
+import { BusyError, QuotaError } from "@/lib/gemini";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -68,8 +68,11 @@ export async function POST(req: Request) {
     if (err instanceof RefusedError) {
       return NextResponse.json({ error: "Couldn't help with that chat. Try a different one." }, { status: 422 });
     }
+    if (err instanceof BusyError) {
+      return NextResponse.json({ error: "The AI is a bit overloaded right now. Wait a few seconds and tap again 🙏 (this one didn't count)" }, { status: 503 });
+    }
     if (err instanceof QuotaError) {
-      return NextResponse.json({ error: "Rizz is super busy today. Try again in a bit." }, { status: 503 });
+      return NextResponse.json({ error: "Rizz hit its free daily AI limit. It resets at 1:30 PM IST. Sorry! 🙏" }, { status: 503 });
     }
     if (err instanceof Anthropic.RateLimitError) {
       return NextResponse.json({ error: "Too busy right now, try again in a moment." }, { status: 503 });

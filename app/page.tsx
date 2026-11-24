@@ -52,6 +52,7 @@ export default function Home() {
   const [language, setLanguage] = useState<string>("Hinglish");
   const [goal, setGoal] = useState("");
   const [loading, setLoading] = useState(false);
+  const [slow, setSlow] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState<Result | null>(null);
   // Matches (people the user is chatting with), saved on this phone only.
@@ -249,6 +250,8 @@ export default function Home() {
     if (mode === "shot" && !images.length) return setError("Add a chat screenshot first.");
     if (mode === "text" && !chatText.trim()) return setError("Paste the chat first.");
     setLoading(true);
+    setSlow(false);
+    const slowTimer = setTimeout(() => setSlow(true), 7000);
     try {
       const r = await fetch("/api/reply", {
         method: "POST",
@@ -289,6 +292,7 @@ export default function Home() {
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong.");
     } finally {
+      clearTimeout(slowTimer);
       setLoading(false);
     }
   }
@@ -447,7 +451,7 @@ export default function Home() {
       </section>
 
       <button className="cta" onClick={generate} disabled={loading}>
-        {loading ? (<><span className="spinner" />Cooking up replies…</>) : result ? "Get new replies ✨" : "Get replies ✨"}
+        {loading ? (<><span className="spinner" />{slow ? "AI is busy, still trying…" : "Cooking up replies…"}</>) : result ? "Get new replies ✨" : "Get replies ✨"}
       </button>
       {error && <p className="err">{error}</p>}
 
