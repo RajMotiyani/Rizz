@@ -104,7 +104,8 @@ export async function endSession() {
  * Until then the app keeps working anonymously, keyed on the device cookie.
  */
 export function authEnabled(): boolean {
-  return !!(process.env.BREVO_API_KEY && process.env.EMAIL_FROM) || process.env.AUTH_DEV_LOG === "1";
+  // Needs email sending AND the user database, so accounts are never kept in temporary storage.
+  return (!!(process.env.BREVO_API_KEY && process.env.EMAIL_FROM) && dbConfigured()) || process.env.AUTH_DEV_LOG === "1";
 }
 
 /** The logged-in user, or null. When login is off, an anonymous per-device user. */
