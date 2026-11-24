@@ -12,6 +12,7 @@ export async function generateReplies(input: {
   language: Language;
   goal: string;
   match?: MatchContext | null;
+  style?: string;
 }): Promise<ReplyResult> {
   if (!process.env.GEMINI_API_KEY && !process.env.ANTHROPIC_API_KEY) {
     console.error("No AI key set: add GEMINI_API_KEY in your environment variables.");

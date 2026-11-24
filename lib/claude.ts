@@ -33,6 +33,7 @@ export type Analysis = {
 
 export type ReplyResult = {
   read: string;
+  style: string; // how the user texts, learned from their own messages
   replies: { text: string; vibe: string }[];
   tip: string;
   analysis: Analysis;
@@ -52,6 +53,7 @@ export function userPrompt(input: {
   language: string;
   goal: string;
   match?: MatchContext | null;
+  style?: string;
 }): string {
   const lang = input.language;
   const parts = [
@@ -59,6 +61,7 @@ export function userPrompt(input: {
     `Tone: ${input.tone}`,
     `Language: ${lang}. Write all 4 replies in ${lang}${lang === "Hinglish" ? ' (Hindi + English mixed, Roman script, e.g. "acha toh kab mil rahe ho?")' : lang === "Tanglish" ? " (Tamil + English mixed, Roman script)" : ""}, even if the chat is in another language.`,
   ];
+  if (input.style) parts.push(`How I usually text (learned from my earlier chats; my own messages in THIS chat win if they differ): ${input.style}`);
   if (input.goal) parts.push(`What I want from this reply: ${input.goal}`);
   if (input.match) {
     const m = input.match;
@@ -81,7 +84,23 @@ Reading the chat:
 
 Writing replies:
 - Write exactly 4 different replies the user can copy and send as-is.
-- Sound like a real person texting: short (usually under 25 words), casual, no hashtags, emojis only if they fit naturally.
+- The replies must read like the USER typed them on their phone, never like AI. The match should not be able to tell.
+
+Copy the user's own texting style. Study the user's messages in the chat (and "How I usually text" if given) and mirror:
+- Length: if they send 3-8 word texts, so do you. Also match the match's energy: a short message gets a short reply.
+- Casing: copy it exactly. If they type in lowercase, write lowercase. If they capitalise and write neat sentences, do the same (still skip the final full stop).
+- Punctuation: copy their habits ("..", "??", "!!", commas or none). Don't end a text with a single full stop.
+- Emojis: use the same ones they use, as often as they do. If they rarely use emojis, use none.
+- Slang and short forms they use: "u", "ur", "rn", "ngl", "yaar", "bro", "haha" vs "hahaha" vs "lol" vs "😂", "hmm", stretched words ("sooo", "yesss").
+- Their Hindi/English mix and spelling ("kya", "kyaa", "acha", "accha").
+- The user's own messages in this chat are the strongest signal. Only if you can't see any of them, default to casual Indian texting: mostly lowercase, no full stop at the end, short, at most one emoji.
+
+Never use these AI giveaways:
+- Em dashes or en dashes (— –), semicolons, or perfectly formal grammar and punctuation.
+- Polished one-liners that sound written, cheesy pickup lines, or puns stacked on puns.
+- Phrases like "I'd love to", "Absolutely!", "Oh, ", "Ah, ", "That sounds amazing", "I must say", "fair enough, but", "intriguing", "delightful", "adventure", "vibe check", "spill the tea".
+- Starting with "Haha," followed by a full sentence, asking two questions in one text, or using more than one exclamation mark unless the user does.
+- Starting the reply with their name.
 - Use specifics from the chat (names, plans, jokes, things they mentioned). Avoid generic pickup lines.
 - Follow the requested tone and language closely.
   - Hinglish: Hindi and English mixed, written in Roman script, the way urban Indians text ("acha toh weekend pe kya scene hai?").
@@ -108,6 +127,7 @@ Interest analysis (judge the MATCH's behaviour, not the user's):
 - "memory": short running notes about the match for future chats (max 80 words): their interests, plans discussed, inside jokes, how the vibe is trending. Merge the earlier notes with what's new; drop stale details. No phone numbers, addresses or other personal identifiers.
 
 Return:
+- "style": one line (max 25 words, in English) describing how the USER texts, e.g. "lowercase, no full stops, short texts, uses 'yaar' and 😂, Hinglish". Base it on their messages here plus "How I usually text" if given. If you can't see any of their messages, return the earlier style as-is, or "" if there was none.
 - "read": one short sentence on the vibe and what the match seems to want (in English).
 - "replies": the 4 replies, each with "vibe", a 1-3 word label in English (e.g. "Playful tease").
 - "tip": one short, practical tip for this conversation (in English).
@@ -116,6 +136,7 @@ Return:
 export const SCHEMA = {
   type: "object",
   properties: {
+    style: { type: "string" },
     read: { type: "string" },
     replies: {
       type: "array",
@@ -141,7 +162,7 @@ export const SCHEMA = {
       additionalProperties: false,
     },
   },
-  required: ["read", "replies", "tip", "analysis"],
+  required: ["style", "read", "replies", "tip", "analysis"],
   additionalProperties: false,
 } as const;
 
@@ -156,6 +177,7 @@ export async function generateWithClaude(input: {
   language: Language;
   goal: string;
   match?: MatchContext | null;
+  style?: string;
 }): Promise<ReplyResult> {
   const content: Anthropic.Beta.BetaContentBlockParam[] = [];
   for (const img of input.images) {
@@ -188,6 +210,8 @@ export async function generateWithClaude(input: {
 
 /** Clamp and tidy model output so the UI can trust it. */
 export function normalize(r: ReplyResult): ReplyResult {
+  r.style = (r.style ?? "").slice(0, 200);
+  r.replies = (r.replies ?? []).map((x) => ({ ...x, text: humanize(x.text) })).filter((x) => x.text);
   const a = r.analysis ?? ({} as Analysis);
   r.analysis = {
     interest: Math.max(0, Math.min(100, Math.round(Number(a.interest) || 50))),
@@ -198,4 +222,17 @@ export function normalize(r: ReplyResult): ReplyResult {
     memory: (a.memory ?? "").slice(0, 900),
   };
   return r;
+}
+
+/** Scrub punctuation that gives away AI-written text. */
+export function humanize(t: string): string {
+  let s = (t ?? "").trim();
+  s = s.replace(/^["“”']+|["“”']+$/g, ""); // stray wrapping quotes
+  s = s.replace(/\s*[—–]\s*/g, (m, i) => (i === 0 ? "" : ", ")); // dashes -> commas
+  s = s.replace(/;\s*/g, ", ");
+  s = s.replace(/…/g, "...");
+  s = s.replace(/,\s*,/g, ",").replace(/\s+,/g, ",");
+  // Real people rarely end a text with a single full stop (but keep "..." and abbreviations like "etc.").
+  if (/[^.]\.$/.test(s) && !/\b(etc|vs|mr|mrs|dr)\.$/i.test(s)) s = s.slice(0, -1);
+  return s.trim();
 }

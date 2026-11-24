@@ -27,6 +27,7 @@ const Body = z.object({
   tone: z.enum(TONES),
   language: z.enum(LANGUAGES),
   goal: z.string().max(200).default(""),
+  style: z.string().max(300).default(""),
   match: z
     .object({
       name: z.string().trim().min(1).max(40),

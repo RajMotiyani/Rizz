@@ -26,6 +26,7 @@ export async function generateWithGemini(input: {
   language: string;
   goal: string;
   match?: MatchContext | null;
+  style?: string;
 }): Promise<ReplyResult> {
   const key = process.env.GEMINI_API_KEY;
   if (!key) throw new Error("GEMINI_API_KEY is not set");

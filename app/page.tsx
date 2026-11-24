@@ -309,6 +309,7 @@ export default function Home() {
           tone,
           language,
           goal,
+          style: (() => { try { return localStorage.getItem("rizz_style") ?? ""; } catch { return ""; } })(),
           match: selected
             ? { name: selected.name, memory: selected.memory, scores: selected.checkins.slice(-10).map((c) => c.interest) }
             : null,
@@ -322,6 +323,9 @@ export default function Home() {
       if (data.status) setStatus((s) => ({ ...s, ...data.status }));
       if (!r.ok) throw new Error(data.error || "Something went wrong.");
       setResult(data.result);
+      try {
+        if (data.result.style) localStorage.setItem("rizz_style", data.result.style);
+      } catch {}
       setResultMatchId(selected?.id ?? null);
       if (selected) {
         const a: Analysis = data.result.analysis;
