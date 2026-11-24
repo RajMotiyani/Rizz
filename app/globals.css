@@ -66,3 +66,7 @@ textarea { min-height: 130px; }
 .row button { border: 0; border-radius: 12px; padding: 0 16px; background: var(--card2); cursor: pointer; font-weight: 600; }
 .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid #fff6; border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; vertical-align: -3px; margin-right: 8px; }
 @keyframes spin { to { transform: rotate(360deg); } }
+.install { display: flex; align-items: center; gap: 8px; background: var(--card2); border-radius: 12px; padding: 10px 12px; margin-bottom: 12px; font-size: 14px; }
+.install span { flex: 1; }
+.install button { border: 0; border-radius: 10px; padding: 7px 12px; background: var(--accent); color: #fff; font-weight: 700; cursor: pointer; }
+.install button.x { background: transparent; color: var(--muted); font-size: 18px; padding: 0 4px; }

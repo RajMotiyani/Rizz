@@ -60,6 +60,27 @@ export default function Home() {
     if (r.ok) setStatus(await r.json());
   }, []);
 
+  // Install-to-home-screen support.
+  const [installEvt, setInstallEvt] = useState<(Event & { prompt: () => Promise<void> }) | null>(null);
+  const [iosHint, setIosHint] = useState(false);
+  useEffect(() => {
+    if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
+    const standalone = window.matchMedia("(display-mode: standalone)").matches || (navigator as unknown as { standalone?: boolean }).standalone;
+    if (standalone || localStorage.getItem("rizz_install_dismissed")) return;
+    const onPrompt = (e: Event) => {
+      e.preventDefault();
+      setInstallEvt(e as Event & { prompt: () => Promise<void> });
+    };
+    window.addEventListener("beforeinstallprompt", onPrompt);
+    if (/iphone|ipad|ipod/i.test(navigator.userAgent)) setIosHint(true);
+    return () => window.removeEventListener("beforeinstallprompt", onPrompt);
+  }, []);
+  function dismissInstall() {
+    localStorage.setItem("rizz_install_dismissed", "1");
+    setInstallEvt(null);
+    setIosHint(false);
+  }
+
   useEffect(() => {
     refresh();
     const saved = localStorage.getItem("rizz_prefs");
@@ -155,6 +176,17 @@ export default function Home() {
         </div>
         {status && <span className="badge">{status.left}/{status.limit} left today</span>}
       </div>
+      {(installEvt || iosHint) && (
+        <div className="install">
+          <span>
+            {installEvt ? "📲 Add Rizz to your home screen" : "📲 Install: tap Share, then “Add to Home Screen”"}
+          </span>
+          {installEvt && (
+            <button onClick={async () => { await installEvt.prompt(); dismissInstall(); }}>Install</button>
+          )}
+          <button className="x" aria-label="Dismiss" onClick={dismissInstall}>×</button>
+        </div>
+      )}
       <p className="hero">Stuck on what to text back? Drop the chat, pick a vibe, get 4 replies you can send right away.</p>
 
       <section className="card">
