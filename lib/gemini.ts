@@ -4,7 +4,7 @@ const API = "https://generativelanguage.googleapis.com/v1beta/models";
 
 /** Models to try in order. When the first hits its free daily quota (429), the next one is used. */
 function models(): string[] {
-  return (process.env.GEMINI_MODELS ?? "gemini-3.5-flash-lite,gemini-3.1-flash-lite")
+  return (process.env.GEMINI_MODELS ?? "gemini-3.5-flash-lite,gemini-flash-lite-latest,gemini-3.1-flash-lite")
     .split(",")
     .map((m) => m.trim())
     .filter(Boolean);
@@ -46,57 +46,97 @@ export async function generateWithGemini(input: {
     },
   });
 
-  // Google's free tier often answers 503 "high demand". Retry with a short backoff,
-  // alternating between models, before giving up.
+  // Google's free tier is often slow or answers 503 "high demand". Instead of waiting on one
+  // request, run a staggered race: start the first model, and if it hasn't answered within a
+  // few seconds (or fails), start the next one too. The first good answer wins and the rest
+  // are cancelled.
   const list = models();
-  const attempts = Math.max(5, list.length);
-  const started = Date.now();
-  let lastErr: Error = new Error("No Gemini model configured");
+  const plan = [...list, ...list].slice(0, Math.max(4, list.length)); // second round reuses models
+  const HEDGE_MS = 3500;
+  const DEADLINE_MS = 45_000;
+  const controllers: AbortController[] = [];
   let quotaHits = 0;
-  for (let i = 0; i < attempts && Date.now() - started < 40_000; i++) {
-    const model = list[i % list.length];
-    if (i > 0) await new Promise((r) => setTimeout(r, Math.min(400 * 2 ** (i - 1), 3000) + Math.random() * 300));
-    let res: Response;
-    try {
-      res = await fetch(`${API}/${encodeURIComponent(model)}:generateContent`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-goog-api-key": key },
-        body,
-        cache: "no-store",
-        signal: AbortSignal.timeout(25_000),
-      });
-    } catch (e) {
-      lastErr = e instanceof Error ? e : new Error(String(e));
-      console.warn(`Gemini ${model} network error, retrying`, lastErr.message);
-      continue;
-    }
+  let lastErr: Error = new Error("No Gemini model configured");
+
+  const attempt = async (model: string, ctrl: AbortController): Promise<ReplyResult> => {
+    const res = await fetch(`${API}/${encodeURIComponent(model)}:generateContent`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+      body,
+      cache: "no-store",
+      signal: ctrl.signal,
+    });
     if (res.status === 429) {
       quotaHits++;
-      lastErr = new QuotaError(`${model} quota`);
-      continue;
+      throw new QuotaError(`${model} quota`);
     }
-    if (res.status === 404 || res.status >= 500) {
-      lastErr = new BusyError(`${model} ${res.status}`);
-      console.warn(`Gemini ${model} ${res.status}, retrying`);
-      continue;
-    }
+    if (res.status === 404 || res.status >= 500) throw new BusyError(`${model} ${res.status}`);
     if (!res.ok) throw new Error(`Gemini ${res.status}: ${(await res.text()).slice(0, 300)}`);
     const data = (await res.json()) as GeminiResponse;
     if (data.promptFeedback?.blockReason) throw new RefusedError(data.promptFeedback.blockReason);
     const cand = data.candidates?.[0];
     if (cand?.finishReason === "SAFETY" || cand?.finishReason === "PROHIBITED_CONTENT") throw new RefusedError("safety");
     const text = cand?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
-    try {
-      const parsed = JSON.parse(text) as ReplyResult;
-      parsed.replies = (parsed.replies ?? []).filter((r) => r.text?.trim()).slice(0, 4);
-      if (!parsed.replies.length) throw new Error("No replies returned");
-      return normalize(parsed);
-    } catch (e) {
-      // Truncated or malformed output: try again.
-      lastErr = e instanceof Error ? e : new Error(String(e));
-      console.warn(`Gemini ${model} bad output (${cand?.finishReason}), retrying`);
-    }
+    const parsed = JSON.parse(text) as ReplyResult; // malformed output throws and counts as a failed attempt
+    parsed.replies = (parsed.replies ?? []).filter((r) => r.text?.trim()).slice(0, 4);
+    if (!parsed.replies.length) throw new Error("No replies returned");
+    return normalize(parsed);
+  };
+
+  try {
+    return await new Promise<ReplyResult>((resolve, reject) => {
+      let next = 0;
+      let running = 0;
+      let done = false;
+      let hedgeTimer: ReturnType<typeof setTimeout> | null = null;
+      const deadline = setTimeout(() => finish(null, new BusyError("deadline")), DEADLINE_MS);
+
+      const finish = (value: ReplyResult | null, err?: Error) => {
+        if (done) return;
+        done = true;
+        clearTimeout(deadline);
+        if (hedgeTimer) clearTimeout(hedgeTimer);
+        if (value) resolve(value);
+        else reject(err);
+      };
+      const launch = () => {
+        if (done) return;
+        if (hedgeTimer) clearTimeout(hedgeTimer);
+        if (next >= plan.length) {
+          if (running === 0) {
+            const e =
+              quotaHits >= list.length && !(lastErr instanceof BusyError)
+                ? new QuotaError("all models out of quota")
+                : lastErr instanceof QuotaError || lastErr instanceof RefusedError
+                  ? lastErr
+                  : new BusyError(lastErr.message);
+            finish(null, e);
+          }
+          return;
+        }
+        const model = plan[next++];
+        const ctrl = new AbortController();
+        controllers.push(ctrl);
+        running++;
+        attempt(model, ctrl)
+          .then((r) => finish(r))
+          .catch((e: Error) => {
+            if (done || ctrl.signal.aborted) return;
+            lastErr = e;
+            if (e instanceof RefusedError) return finish(null, e);
+            console.warn(`Gemini ${model} failed: ${e.message}`);
+          })
+          .finally(() => {
+            running--;
+            // A failure starts the next model right away.
+            if (!done) launch();
+          });
+        // If this one is slow, start the next in parallel.
+        hedgeTimer = setTimeout(launch, HEDGE_MS);
+      };
+      launch();
+    });
+  } finally {
+    for (const c of controllers) c.abort();
   }
-  if (quotaHits >= list.length && !(lastErr instanceof BusyError)) throw new QuotaError("all models out of quota");
-  throw lastErr instanceof QuotaError ? lastErr : new BusyError(lastErr.message);
 }
