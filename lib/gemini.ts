@@ -4,7 +4,7 @@ const API = "https://generativelanguage.googleapis.com/v1beta/models";
 
 /** Models to try in order. When the first hits its free daily quota (429), the next one is used. */
 function models(): string[] {
-  return (process.env.GEMINI_MODELS ?? "gemini-3.5-flash-lite,gemini-flash-lite-latest,gemini-3.1-flash-lite")
+  return (process.env.GEMINI_MODELS ?? "gemini-3.5-flash-lite,gemini-flash-lite-latest,gemini-3.1-flash-lite,gemini-3.5-flash,gemini-3-flash-preview,gemini-flash-latest")
     .split(",")
     .map((m) => m.trim())
     .filter(Boolean);
@@ -79,9 +79,10 @@ export async function translateWithGemini(texts: string[], language: string): Pr
  */
 async function race<T>(key: string, body: string, parse: (text: string) => T): Promise<T> {
   const list = models();
-  const plan = [...list, ...list].slice(0, Math.max(4, list.length)); // second round reuses models
+  // Keep cycling through the models (with growing pauses) until one answers or time runs out.
+  const plan = [...list, ...list, ...list, ...list];
   const HEDGE_MS = 3500;
-  const DEADLINE_MS = 45_000;
+  const DEADLINE_MS = 52_000;
   const controllers: AbortController[] = [];
   let quotaHits = 0;
   let lastErr: Error = new Error("No Gemini model configured");
@@ -153,8 +154,9 @@ async function race<T>(key: string, body: string, parse: (text: string) => T): P
           })
           .finally(() => {
             running--;
-            // A failure starts the next model right away.
-            if (!done) launch();
+            // After a failure, try the next model after a short pause that grows each round,
+            // since Google's "high demand" spikes often clear within seconds.
+            if (!done) setTimeout(launch, 300 + 900 * Math.floor(next / list.length));
           });
         // If this one is slow, start the next in parallel.
         hedgeTimer = setTimeout(launch, HEDGE_MS);

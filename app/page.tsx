@@ -339,7 +339,7 @@ export default function Home() {
     setSlow(false);
     const slowTimer = setTimeout(() => setSlow(true), 7000);
     try {
-      const r = await fetch("/api/reply", {
+      const send = () => fetch("/api/reply", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -354,7 +354,15 @@ export default function Home() {
             : null,
         }),
       });
-      const data = await r.json();
+      // Google's free AI often has short "high demand" spikes: quietly retry a couple of times.
+      let r = await send();
+      let data = await r.json().catch(() => ({}));
+      for (let tries = 1; tries < 2 && r.status === 503 && data.code === "busy"; tries++) {
+        setSlow(true);
+        await new Promise((ok) => setTimeout(ok, 2500));
+        r = await send();
+        data = await r.json().catch(() => ({}));
+      }
       if (r.status === 401) {
         setAuthed(false);
         return;

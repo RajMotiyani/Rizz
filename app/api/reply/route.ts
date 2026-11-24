@@ -74,7 +74,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Couldn't help with that chat. Try a different one." }, { status: 422 });
     }
     if (err instanceof BusyError) {
-      return NextResponse.json({ error: "The AI is a bit overloaded right now. Wait a few seconds and tap again 🙏 (this one didn't count)" }, { status: 503 });
+      return NextResponse.json({ error: "Google's free AI is very busy right now. Please try again in a minute 🙏 (this one didn't count)", code: "busy" }, { status: 503 });
     }
     if (err instanceof QuotaError) {
       return NextResponse.json({ error: "Rizz hit its free daily AI limit. It resets at 1:30 PM IST. Sorry! 🙏" }, { status: 503 });
