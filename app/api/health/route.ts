@@ -22,5 +22,9 @@ export async function GET() {
     provider: process.env.AI_PROVIDER ?? (key ? "gemini" : "claude"),
     sessionSecret: process.env.SESSION_SECRET ? "set" : "missing",
     redis: process.env.UPSTASH_REDIS_REST_URL ? "set" : "not set",
+    // Names only (never values), to spot typos like a trailing space.
+    relatedNames: Object.keys(process.env).filter((k) => /gemini|session|secret/i.test(k)).map((k) => JSON.stringify(k)),
+    commit: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? null,
+    env: process.env.VERCEL_ENV ?? null,
   });
 }
