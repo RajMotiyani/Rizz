@@ -8,12 +8,12 @@
   --accent2: #ff9a5a;
   --ok: #3ddc97;
   --warn: #ffd166;
-  --bad: var(--bad);
-  --border: var(--border);
-  --border2: var(--border2);
-  --faint: var(--faint);
+  --bad: #ff8a8a;
+  --border: #3a3056;
+  --border2: #463a66;
+  --faint: #6f6690;
   --on-accent: #fff;
-  --glow: var(--glow);
+  --glow: #ff4f8b44;
   --radius: 16px;
   color-scheme: dark;
 }
@@ -137,3 +137,23 @@ textarea { min-height: 130px; }
 .code { font-size: 28px; letter-spacing: 10px; text-align: center; font-weight: 800; }
 .row-links { display: flex; justify-content: space-between; margin-top: 14px; }
 .link:disabled { opacity: .5; cursor: default; text-decoration: none; }
+
+/* First-time tour */
+.tour { position: fixed; inset: 0; z-index: 100; }
+.tour-dim { position: fixed; inset: 0; background: #000a; }
+.tour-hole { position: fixed; border-radius: 14px; box-shadow: 0 0 0 9999px #000b, 0 0 0 2px var(--accent); transition: all .25s ease; pointer-events: none; }
+.tour-tip { position: fixed; width: min(340px, calc(100vw - 24px)); background: var(--card); color: var(--text); border: 1px solid var(--border2);
+  border-radius: 16px; padding: 16px; box-shadow: 0 12px 40px #0008; animation: tourIn .2s ease; }
+@keyframes tourIn { from { opacity: 0; } to { opacity: 1; } }
+.tour-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.tour-head strong { font-size: 17px; }
+.tour-count { font-size: 12px; color: var(--muted); }
+.tour-tip p { margin: 8px 0 12px; color: var(--muted); font-size: 14.5px; line-height: 1.45; }
+.tour-dots { display: flex; gap: 5px; margin-bottom: 12px; }
+.tour-dots span { width: 6px; height: 6px; border-radius: 99px; background: var(--border2); transition: all .2s; }
+.tour-dots span.on { width: 18px; background: var(--accent); }
+.tour-acts { display: flex; align-items: center; gap: 8px; }
+.tour-acts button { border: 0; cursor: pointer; font-weight: 600; font-size: 14px; border-radius: 10px; padding: 9px 14px; }
+.tour-skip { background: transparent; color: var(--muted); padding-left: 0 !important; text-decoration: underline; }
+.tour-back { background: var(--card2); color: var(--text); }
+.tour-next { background: linear-gradient(90deg, var(--accent), var(--accent2)); color: var(--on-accent); }

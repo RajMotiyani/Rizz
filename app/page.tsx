@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Tour, { TOUR_KEY } from "./Tour";
 import { VibeMusic } from "@/lib/music";
 import { loadMatches, overallScore, saveMatches, SOLID_AFTER, trend, VERDICTS, type Match, type Verdict } from "@/lib/matches";
 
@@ -125,6 +126,14 @@ export default function Home() {
   }
 
   // Colour theme, saved on this phone. The <head> script in layout.tsx applies it before first paint.
+  const [tourOpen, setTourOpen] = useState(false);
+  useEffect(() => {
+    if (!authed) return;
+    try {
+      if (!localStorage.getItem(TOUR_KEY)) setTourOpen(true);
+    } catch {}
+  }, [authed]);
+
   const [theme, setTheme] = useState("love");
   const [themeOpen, setThemeOpen] = useState(false);
   useEffect(() => {
@@ -370,7 +379,8 @@ export default function Home() {
         <div className="logo">
           <span>Rizz</span> ✨
         </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }} data-tour="toolbar">
+          <button className="badge" onClick={() => setTourOpen(true)} aria-label="How Rizz works" title="How Rizz works">❔</button>
           <button className="badge" onClick={() => setThemeOpen(true)} aria-label="Change theme">🎨</button>
           <button
             className="badge"
@@ -392,7 +402,7 @@ export default function Home() {
       )}
       <p className="hero">Stuck on what to text back? Drop the chat, pick a vibe, get 4 replies you can send right away.</p>
 
-      <section className="card">
+      <section className="card" data-tour="input">
         <div className="tabs">
           <button className={mode === "shot" ? "on" : ""} onClick={() => setMode("shot")}>📸 Screenshot</button>
           <button className={mode === "text" ? "on" : ""} onClick={() => setMode("text")}>💬 Paste text</button>
@@ -435,7 +445,7 @@ export default function Home() {
         )}
       </section>
 
-      <section className="card">
+      <section className="card" data-tour="match">
         <p className="label">Who&apos;s this chat with?</p>
         <div className="chips">
           <button className={`chip ${!matchId ? "on" : ""}`} onClick={() => selectMatch(null)}>Just this once</button>
@@ -477,33 +487,39 @@ export default function Home() {
       </section>
 
       <section className="card">
-        <p className="label">Vibe</p>
-        <div className="chips">
-          {TONES.map((t) => (
-            <button key={t.id} className={`chip ${tone === t.id ? "on" : ""}`} onClick={() => setTone(t.id)}>
-              {t.label}
-            </button>
-          ))}
+        <div data-tour="vibe">
+          <p className="label">Vibe</p>
+          <div className="chips">
+            {TONES.map((t) => (
+              <button key={t.id} className={`chip ${tone === t.id ? "on" : ""}`} onClick={() => setTone(t.id)}>
+                {t.label}
+              </button>
+            ))}
+          </div>
         </div>
-        <p className="label" style={{ marginTop: 14 }}>Language</p>
-        <div className="chips">
-          {LANGS.map((l) => (
-            <button key={l} className={`chip ${language === l ? "on" : ""}`} onClick={() => setLanguage(l)}>
-              {l}
-            </button>
-          ))}
+        <div data-tour="language" style={{ marginTop: 14 }}>
+          <p className="label">Language</p>
+          <div className="chips">
+            {LANGS.map((l) => (
+              <button key={l} className={`chip ${language === l ? "on" : ""}`} onClick={() => setLanguage(l)}>
+                {l}
+              </button>
+            ))}
+          </div>
         </div>
-        <p className="label" style={{ marginTop: 14 }}>Goal (optional)</p>
-        <input
-          type="text"
-          placeholder="e.g. ask for a chai date, revive a dead chat"
-          value={goal}
-          maxLength={200}
-          onChange={(e) => setGoal(e.target.value)}
-        />
+        <div data-tour="goal" style={{ marginTop: 14 }}>
+          <p className="label">Goal (optional)</p>
+          <input
+            type="text"
+            placeholder="e.g. ask for a chai date, revive a dead chat"
+            value={goal}
+            maxLength={200}
+            onChange={(e) => setGoal(e.target.value)}
+          />
+        </div>
       </section>
 
-      <button className="cta" onClick={generate} disabled={loading}>
+      <button className="cta" data-tour="cta" onClick={generate} disabled={loading}>
         {loading ? (<><span className="spinner" />{slow ? "AI is busy, still trying…" : "Cooking up replies…"}</>) : result ? "Get new replies ✨" : "Get replies ✨"}
       </button>
       {error && <p className="err">{error}</p>}
@@ -527,6 +543,8 @@ export default function Home() {
         </section>
       )}
 
+
+      <Tour open={tourOpen} onClose={() => setTourOpen(false)} />
 
       <footer className="foot">
         100% free. Rizz never stores your screenshots; they are sent to Google Gemini to write replies.
