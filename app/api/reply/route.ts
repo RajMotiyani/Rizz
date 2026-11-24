@@ -43,15 +43,8 @@ export async function POST(req: Request) {
   const c = await claim(id, await clientIp());
   if (!c.ok) {
     return NextResponse.json(
-      {
-        error:
-          c.reason === "free_limit"
-            ? "You've used today's free replies."
-            : "Daily fair-use limit reached. Try again tomorrow.",
-        code: c.reason,
-        status: await status(id),
-      },
-      { status: 402 },
+      { error: "You've used all your replies for today. Come back tomorrow! 💜", code: "limit", status: await status(id) },
+      { status: 429 },
     );
   }
 
@@ -74,6 +67,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Couldn't read that image. Try a PNG or JPG screenshot." }, { status: 400 });
     }
     console.error("reply failed", err);
-    return NextResponse.json({ error: "Something went wrong. Your free reply wasn't used." }, { status: 500 });
+    return NextResponse.json({ error: "Something went wrong. That one didn't count, try again." }, { status: 500 });
   }
 }

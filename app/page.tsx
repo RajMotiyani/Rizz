@@ -19,21 +19,7 @@ const LANGS = [
 type Img = { mediaType: string; data: string; preview: string };
 type Reply = { text: string; vibe: string };
 type Result = { read: string; replies: Reply[]; tip: string };
-type Status = {
-  paid: boolean;
-  passExpiresAt: number | null;
-  freeLeft: number;
-  freeLimit: number;
-  pricePaise?: number;
-  passDays?: number;
-  razorpayKeyId?: string | null;
-};
-
-declare global {
-  interface Window {
-    Razorpay?: new (opts: Record<string, unknown>) => { open: () => void; on: (e: string, cb: (r: unknown) => void) => void };
-  }
-}
+type Status = { used: number; left: number; limit: number };
 
 /** Shrink screenshots in the browser so uploads are fast on mobile data. */
 async function toImg(file: File): Promise<Img> {
@@ -67,11 +53,6 @@ export default function Home() {
   const [result, setResult] = useState<Result | null>(null);
   const [copied, setCopied] = useState<number | null>(null);
   const [status, setStatus] = useState<Status | null>(null);
-  const [paywall, setPaywall] = useState(false);
-  const [paying, setPaying] = useState(false);
-  const [restoreOpen, setRestoreOpen] = useState(false);
-  const [restoreId, setRestoreId] = useState("");
-  const [payMsg, setPayMsg] = useState("");
   const resultsRef = useRef<HTMLDivElement>(null);
 
   const refresh = useCallback(async () => {
@@ -139,11 +120,7 @@ export default function Home() {
         }),
       });
       const data = await r.json();
-      if (data.status) setStatus((s) => ({ ...s, ...data.status }));
-      if (r.status === 402 && data.code === "free_limit") {
-        setPaywall(true);
-        return;
-      }
+      if (data.status) setStatus(data.status);
       if (!r.ok) throw new Error(data.error || "Something went wrong.");
       setResult(data.result);
       setCopied(null);
@@ -169,76 +146,6 @@ export default function Home() {
     setCopied(i);
   }
 
-  async function pay() {
-    setPayMsg("");
-    if (!window.Razorpay) return setPayMsg("Payment is still loading. Try again in a second.");
-    setPaying(true);
-    try {
-      const r = await fetch("/api/pay/order", { method: "POST" });
-      const order = await r.json();
-      if (!r.ok) throw new Error(order.error);
-      const rzp = new window.Razorpay({
-        key: order.keyId,
-        order_id: order.orderId,
-        amount: order.amount,
-        currency: order.currency,
-        name: "Rizz",
-        description: `Unlimited replies for ${status?.passDays ?? 7} days`,
-        notes: { product: "weekly_pass" },
-        theme: { color: "#ff4f8b" },
-        config: {
-          display: {
-            preferences: { show_default_blocks: true },
-            sequence: ["block.upi"],
-            blocks: { upi: { name: "Pay with UPI", instruments: [{ method: "upi" }] } },
-          },
-        },
-        handler: async (resp: Record<string, string>) => {
-          const v = await fetch("/api/pay/verify", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(resp),
-          });
-          const d = await v.json();
-          if (!v.ok) return setPayMsg(d.error || "Couldn't verify payment.");
-          setStatus((s) => ({ ...s, ...d.status }));
-          setPaywall(false);
-          setPayMsg("");
-          alertToast(`You're Pro! Save your payment ID: ${resp.razorpay_payment_id}`);
-        },
-        modal: { ondismiss: () => setPaying(false) },
-      });
-      rzp.on("payment.failed", () => setPayMsg("Payment failed. You weren't charged. Try again."));
-      rzp.open();
-    } catch (e) {
-      setPayMsg(e instanceof Error ? e.message : "Payments are unavailable right now.");
-    } finally {
-      setPaying(false);
-    }
-  }
-
-  async function restore() {
-    setPayMsg("");
-    const r = await fetch("/api/pay/restore", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ paymentId: restoreId.trim() }),
-    });
-    const d = await r.json();
-    if (!r.ok) return setPayMsg(d.error || "Couldn't restore.");
-    setStatus((s) => ({ ...s, ...d.status }));
-    setPaywall(false);
-    setRestoreOpen(false);
-  }
-
-  const [toast, setToast] = useState("");
-  function alertToast(msg: string) {
-    setToast(msg);
-    setTimeout(() => setToast(""), 8000);
-  }
-
-  const price = ((status?.pricePaise ?? 4900) / 100).toFixed(0);
-  const days = status?.passDays ?? 7;
 
   return (
     <main className="wrap">
@@ -246,16 +153,7 @@ export default function Home() {
         <div className="logo">
           <span>Rizz</span> ✨
         </div>
-        {status &&
-          (status.paid ? (
-            <span className="badge pro">
-              Pro till {new Date(status.passExpiresAt!).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
-            </span>
-          ) : (
-            <button className="badge" onClick={() => setPaywall(true)}>
-              {status.freeLeft}/{status.freeLimit} free today
-            </button>
-          ))}
+        {status && <span className="badge">{status.left}/{status.limit} left today</span>}
       </div>
       <p className="hero">Stuck on what to text back? Drop the chat, pick a vibe, get 4 replies you can send right away.</p>
 
@@ -352,45 +250,12 @@ export default function Home() {
         </section>
       )}
 
-      {toast && <div className="card" style={{ position: "fixed", left: 16, right: 16, bottom: 16, zIndex: 20, maxWidth: 488, margin: "0 auto" }}>{toast}</div>}
 
       <footer className="foot">
-        Rizz never stores your screenshots. They are sent to our AI provider to write replies.
+        100% free. Rizz never stores your screenshots; they are sent to Google Gemini to write replies.
         <br />Be kind. Respect a no. 💜
-        {status && !status.paid && (
-          <>
-            <br />
-            <button className="link" onClick={() => { setPaywall(true); setRestoreOpen(true); }}>Already paid? Restore pass</button>
-          </>
-        )}
       </footer>
 
-      {paywall && (
-        <div className="sheet-bg" onClick={() => setPaywall(false)}>
-          <div className="sheet" onClick={(e) => e.stopPropagation()}>
-            <h2>{status?.freeLeft === 0 ? "You're out of free replies today 😅" : "Go unlimited"}</h2>
-            <p className="price">₹{price} <small>/ {days} days</small></p>
-            <ul>
-              <li>Unlimited replies, every vibe and language</li>
-              <li>Pay once with UPI. No auto-renew.</li>
-              <li>Free plan: {status?.freeLimit ?? 5} replies a day, resets at midnight</li>
-            </ul>
-            <button className="cta" onClick={pay} disabled={paying}>
-              {paying ? (<><span className="spinner" />Opening…</>) : `Pay ₹${price} with UPI`}
-            </button>
-            {payMsg && <p className="err">{payMsg}</p>}
-            {!restoreOpen ? (
-              <button className="link" onClick={() => setRestoreOpen(true)}>Already paid? Restore pass</button>
-            ) : (
-              <div className="row">
-                <input type="text" placeholder="pay_XXXXXXXXXXXX" value={restoreId} onChange={(e) => setRestoreId(e.target.value)} />
-                <button onClick={restore}>Restore</button>
-              </div>
-            )}
-            <button className="ghost" onClick={() => setPaywall(false)}>Maybe later</button>
-          </div>
-        </div>
-      )}
     </main>
   );
 }

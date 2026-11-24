@@ -92,7 +92,7 @@ export async function generateWithClaude(input: {
   const parts = [
     input.chatText ? `Chat:\n"""\n${input.chatText}\n"""` : "The chat is in the screenshot(s) above.",
     `Tone: ${input.tone}`,
-    `Language: ${input.language}`,
+    `Language: ${input.language}. Write all 4 replies in ${input.language}${input.language === "Hinglish" ? " (Hindi + English mixed, Roman script, e.g. \"acha toh kab mil rahe ho?\")" : input.language === "Tanglish" ? " (Tamil + English mixed, Roman script)" : ""}, even if the chat is in another language.`,
   ];
   if (input.goal) parts.push(`What I want from this reply: ${input.goal}`);
   content.push({ type: "text", text: parts.join("\n\n") });
