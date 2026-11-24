@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { authEnabled } from "@/lib/auth";
 import { db, dbConfigured, rpc } from "@/lib/db";
 import { brevoKey } from "@/lib/email";
+import { store } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
 
@@ -49,8 +50,10 @@ export async function GET() {
       email = `unreachable: ${(e as Error).message}`;
     }
   }
+  const lastSend = await store().get("email:lastError").catch(() => null);
   return NextResponse.json({
     email,
+    lastSend: lastSend ?? "none yet",
     login: authEnabled() ? "on" : `off (missing: ${[["BREVO_API_KEY", brevoKey()], ["EMAIL_FROM", process.env.EMAIL_FROM], ["SUPABASE_URL", process.env.SUPABASE_URL], ["SUPABASE_SERVICE_ROLE_KEY", process.env.SUPABASE_SERVICE_ROLE_KEY]].filter(([, v]) => !v).map(([k]) => k).join(", ")})`,
     database,
     gemini,

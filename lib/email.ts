@@ -1,3 +1,4 @@
+import { store } from "./store";
 /**
  * Sends the login code by email using Brevo's free plan (300 emails/day).
  * Without BREVO_API_KEY (local dev), the code is printed to the server log instead.
@@ -30,7 +31,13 @@ export async function sendLoginCode(to: string, code: string): Promise<void> {
       textContent: `Your Rizz login code is ${code}. It expires in 10 minutes.`,
     }),
   });
-  if (!res.ok) throw new Error(`Brevo ${res.status}: ${(await res.text()).slice(0, 300)}`);
+  if (!res.ok) {
+    const msg = `Brevo ${res.status}: ${(await res.text()).slice(0, 300)}`;
+    // Keep the last failure (emails redacted) so /api/health can show what went wrong.
+    await store().set("email:lastError", `${new Date().toISOString()} ${msg.replace(/[\w.+-]+@[\w.-]+/g, "<email>")}`, 86400).catch(() => {});
+    throw new Error(msg);
+  }
+  await store().set("email:lastError", `ok ${new Date().toISOString()}`, 86400).catch(() => {});
 }
 
 /** The Brevo key to use: prefers whichever env var holds an API key (xkeysib-). */
